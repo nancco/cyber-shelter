@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>赛博避难所</title>
+    <style>
+        /* ================= 核心重置与安全区适配 ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            /* 关键：底部加上安全距离，防止被挖孔/手势条挡住 */
+            padding: 40px 20px calc(30px + env(safe-area-inset-bottom)) 20px; 
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            margin-top: 20px;
+        }
+        .header h1 { font-size: 26px; margin-bottom: 10px; font-weight: bold; letter-spacing: 1px;}
+        .header p { color: #888; font-size: 14px; margin: 0;}
+        
+        /* ================= 核心：4列图标网格 ================= */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 25px 15px; 
+            width: 100%;
+            max-width: 380px;
+            margin-bottom: 30px;
+        }
+
+        .app-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .icon-box {
+            width: 62px; 
+            height: 62px;
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px; 
+            margin-bottom: 8px;
+            transition: transform 0.1s, background-color 0.1s;
+        }
+
+        .app-icon:active .icon-box {
+            transform: scale(0.9);
+            background-color: #333;
+        }
+
+        .app-name {
+            font-size: 12px;
+            color: #aaaaaa;
+            text-align: center;
+        }
+
+        /* ================= 中间的神仙信箱 ================= */
+        .mail-card {
+            width: 100%;
+            max-width: 380px;
+            background: linear-gradient(135deg, rgba(30,30,30,0.9), rgba(20,20,20,0.9));
+            border: 1px dashed #555; /* 虚线边框，有信封的质感 */
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+        }
+        .mail-card:active { transform: scale(0.98); border-color: #00d2ff; }
+        
+        .mail-info { display: flex; flex-direction: column; gap: 5px; }
+        .mail-info h3 { font-size: 16px; color: #fff; margin: 0;}
+        .mail-info p { font-size: 12px; color: #666; margin: 0;}
+        .mail-icon { font-size: 32px; animation: float 3s ease-in-out infinite; }
+
+        /* ================= 联系弹窗样式 ================= */
+        .contact-modal {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .contact-modal.show { display: flex; opacity: 1; }
+        
+        .contact-content {
+            background: #1e1e1e; border: 1px solid #333;
+            padding: 30px 25px; border-radius: 20px; width: 85%; max-width: 340px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8); text-align: center;
+            transform: translateY(20px); transition: transform 0.3s;
+        }
+        .contact-modal.show .contact-content { transform: translateY(0); }
+        
+        .contact-avatar { font-size: 50px; margin-bottom: 10px; animation: float 2s infinite; }
+        .contact-content h2 { font-size: 1.3rem; color: #fff; margin-bottom: 8px; }
+        .contact-desc { font-size: 0.8rem; color: #888; margin-bottom: 25px; }
+        
+        .contact-item {
+            background: #121212; border-radius: 12px; padding: 12px 15px;
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px; font-size: 0.85rem; color: #fff; border: 1px solid #2a2a2a;
+        }
+        .copy-text { color: #aaa; font-family: monospace; font-size: 0.8rem;}
+        .copy-btn {
+            background: #333; border: none; color: #fff;
+            padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;
+        }
+        .copy-btn:active { background: #00d2ff; color: #000; }
+        .contact-link { color: #00d2ff; text-decoration: none; font-size: 0.8rem; }
+        
+        .close-btn {
+            margin-top: 15px; background: transparent; border: 1px solid #333;
+            color: #888; padding: 10px 30px; border-radius: 10px; font-size: 0.9rem;
+        }
+        .close-btn:active { background: #333; color: #fff; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>赛博避难所</h1>
+        <p>极简白开水</p>
+    </div>
+
+    <!-- ================= 上半部分图标 ================= -->
+    <div class="app-grid">
+        <a href="games/1.html" class="app-icon"><div class="icon-box">🧮</div><div class="app-name">计算器</div></a>
+        <a href="games/2.html" class="app-icon"><div class="icon-box">🐍</div><div class="app-name">贪吃蛇</div></a>
+        <a href="games/3.html" class="app-icon"><div class="icon-box">⏰</div><div class="app-name">打工闹钟</div></a>
+        <a href="games/4.html" class="app-icon"><div class="icon-box">🚩</div><div class="app-name">扫雷</div></a>
+        
+        <a href="games/5.html" class="app-icon"><div class="icon-box">🔢</div><div class="app-name">2048</div></a>
+        <a href="games/6.html" class="app-icon"><div class="icon-box">🎵</div><div class="app-name">本地音乐</div></a>
+        <a href="games/7.html" class="app-icon"><div class="icon-box">🚪</div><div class="app-name">任意门</div></a>
+        <a href="games/8.html" class="app-icon"><div class="icon-box">📓</div><div class="app-name">极简便签</div></a>
+        
+        <a href="games/9.html" class="app-icon"><div class="icon-box">🍅</div><div class="app-name">番茄专注</div></a>
+        <a href="games/10.html" class="app-icon"><div class="icon-box">🐠</div><div class="app-name">赛博木鱼</div></a>
+        <a href="games/11.html" class="app-icon"><div class="icon-box">🎧</div><div class="app-name">白噪音</div></a>
+        <a href="games/12.html" class="app-icon"><div class="icon-box">⭕️</div><div class="app-name">抛硬币</div></a>
+    </div>
+
+    <!-- ================= 中间的神仙信箱 ================= -->
+    <div class="mail-card" onclick="showContact()">
+        <div class="mail-info">
+            <h3>📮 给作者写信</h3>
+            <p>吐槽、建议、或者夸我帅</p>
+        </div>
+        <div class="mail-icon">✉️</div>
+    </div>
+
+    <!-- ================= 下半部分图标 ================= -->
+    <div class="app-grid">
+        <a href="games/13.html" class="app-icon"><div class="icon-box">🔮</div><div class="app-name">赛博求签</div></a>
+        <a href="games/14.html" class="app-icon"><div class="icon-box">⏳</div><div class="app-name">时间刻度</div></a>
+        <a href="games/15.html" class="app-icon"><div class="icon-box">🐳</div><div class="app-name">鲸鱼娘</div></a>
+        <a href="games/16.html" class="app-icon"><div class="icon-box">🧨</div><div class="app-name">赛博自爆</div></a>
+        
+        <a href="games/17.html" class="app-icon"><div class="icon-box">🎟️</div><div class="app-name">刮刮乐</div></a>
+        <a href="games/18.html" class="app-icon"><div class="icon-box">🎡</div><div class="app-name">命运转盘</div></a>
+        <a href="games/19.html" class="app-icon"><div class="icon-box">💬</div><div class="app-name">弹幕墙</div></a>
+        <a href="games/20.html" class="app-icon"><div class="icon-box">🎲</div><div class="app-name">AI盲盒</div></a>
+        
+        <a href="games/21.html" class="app-icon"><div class="icon-box">😂</div><div class="app-name">表情包</div></a>
+        <!-- 如果还有空位，这里可以继续加 -->
+    </div>
+
+    <!-- ================= 联系作者弹窗 ================= -->
+    <div id="contact-modal" class="contact-modal" onclick="closeContact(event)">
+        <div class="contact-content" onclick="event.stopPropagation()">
+            <div class="contact-avatar">💥</div>
+            <h2>赛博避难所</h2>
+            <p class="contact-desc">有事直接找我吧！</p>
+            
+            <div class="contact-item">
+                <span>📧邮箱</span>
+                <!-- ⚠️ 换成你自己的真实邮箱 -->
+                <span class="copy-text" id="email-text">330355742@qq.com</span>
+                <button class="copy-btn" onclick="copyEmail()">一键复制</button>
+            </div>
+            
+            <div class="contact-item">
+                <span>🐙GitHub</span>
+                <!-- ⚠️ 换成你的 GitHub 主页 -->
+                <a href="https://github.com/nancco" target="_blank" class="contact-link">nancco</a>
+				<span>📺bilibili</span>
+				<a href="https://space.bilibili.com/650842966" target="_blank" class="contact-link">卜雨小C</a>
+            </div>
+
+            <button class="close-btn" onclick="closeContact(event)">关闭名片</button>
+        </div>
+    </div>
+
+    <script>
+        // ================= 联系作者与剪贴板逻辑 =================
+        function showContact() {
+            document.getElementById('contact-modal').classList.add('show');
+        }
+        
+        function closeContact(e) {
+            if (e) e.stopPropagation();
+            document.getElementById('contact-modal').classList.remove('show');
+        }
+
+        function copyEmail() {
+            const email = document.getElementById('email-text').innerText;
+            // HBuilderX 原生剪贴板
+            if (window.plus) {
+                try {
+                    plus.nativeUI.toast("📋 邮箱已复制！");
+                    var clipboard = plus.android.importClass("android.content.ClipboardManager");
+                    var main = plus.android.runtimeMainActivity();
+                    var clip = main.getSystemService("clipboard");
+                    plus.android.importClass(clip);
+                    clip.setPrimaryClip(plus.android.invoke("android.content.ClipData", "newPlainText", "email", email));
+                    return;
+                } catch(e) {}
+            }
+            // 网页端兜底
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(email).then(() => alert("📋 邮箱已复制：" + email));
+            } else {
+                alert("请手动记录邮箱：" + email);
+            }
+        }
+
+        // 关闭 HBuilderX 的默认启动图
+        document.addEventListener('plusready', function(){
+            plus.navigator.closeSplashscreen();
+        }, false);
+    </script>
+</body>
+</html>
