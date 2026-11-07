@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博鲸鱼娘养成</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 20px; 
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        .status-bars { width: 85%; max-width: 320px; margin-bottom: 15px; }
+        .bar-group { margin-bottom: 10px; }
+        .bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 5px; font-weight: bold;}
+        .bar-bg { height: 8px; background-color: #333; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.1s linear; } /* 动画调快了 */
+        
+        .fill-hunger { background-color: #ff4757; } 
+        .fill-mood { background-color: #4caf50; }   
+
+        .pet-stage {
+            position: relative; width: 260px; height: 260px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .pet-float-wrapper {
+            animation: sway 4s ease-in-out infinite;
+        }
+
+        .pet-item {
+            width: 220px; 
+            height: 220px;
+            border-radius: 30px; 
+            background-color: #ffffff;
+            border: 3px solid #00d2ff; 
+            box-shadow: 0 0 35px rgba(0, 210, 255, 0.4); 
+            cursor: pointer;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+
+        #petImage { object-fit: cover; display: block; }
+
+        #petEmoji {
+            display: none; 
+            font-size: 110px;
+            line-height: 214px; 
+            text-align: center;
+            background-color: #1e1e1e; 
+        }
+
+        .pet-item.sad {
+            filter: grayscale(100%) brightness(0.6); 
+            border-color: #ff4757; 
+            box-shadow: 0 0 35px rgba(255, 71, 87, 0.6); 
+        }
+
+        .jumping { animation: jumpUp 0.4s ease-out !important; }
+
+        .float-text {
+            position: absolute; color: #fff; font-size: 18px; font-weight: bold;
+            pointer-events: none; animation: floatUp 1s forwards; z-index: 20;
+        }
+
+        .bubble {
+            position: absolute;
+            background: rgba(0, 210, 255, 0.2);
+            border: 1px solid rgba(0, 210, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: bubbleUp 2s ease-in forwards;
+        }
+
+        .action-btns { display: flex; gap: 15px; margin-top: 10px; z-index: 10;}
+        .btn {
+            background-color: #1e1e1e; color: #fff; border: 1px solid #333;
+            padding: 14px 25px; border-radius: 12px; font-size: 16px; font-weight: bold;
+        }
+        .btn:active { background-color: #333; }
+        .btn-feed { color: #ff4757; }
+        .btn-play { color: #4caf50; }
+
+        .feedback-box {
+            position: fixed; bottom: 50px; right: 20px; font-size: 28px;
+            cursor: pointer; opacity: 0.4; transition: opacity 0.3s, transform 0.1s; z-index: 100;
+        }
+        .feedback-box:active { transform: scale(0.9); opacity: 1; }
+
+        @keyframes sway {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+        @keyframes jumpUp {
+            0% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-35px) scale(1.05); }
+            100% { transform: translateY(0) scale(1); }
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-70px); opacity: 0; }
+        }
+        @keyframes bubbleUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-120px) scale(1.5); opacity: 0; }
+        }
+
+        .level-text { font-size: 22px; color: #00d2ff; margin-bottom: 15px; font-weight: bold; text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);}
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="level-text">Lv.<span id="level">1</span> 赛博鲸鱼娘</div>
+
+    <div class="status-bars">
+        <div class="bar-group">
+            <div class="bar-label"><span>算力供给</span> <span id="hungerText">100.0%</span></div>
+            <div class="bar-bg"><div class="bar-fill fill-hunger" id="hungerBar" style="width: 100%;"></div></div>
+        </div>
+        <div class="bar-group">
+            <div class="bar-label"><span>情绪模块</span> <span id="moodText">100.0%</span></div>
+            <div class="bar-bg"><div class="bar-fill fill-mood" id="moodBar" style="width: 100%;"></div></div>
+        </div>
+    </div>
+
+    <div class="pet-stage" id="petStage">
+        <div class="pet-float-wrapper" id="petWrapper">
+            <img id="petImage" class="pet-item" onclick="play()" src="whale.png" onerror="handleImgError()">
+            <div id="petEmoji" class="pet-item" onclick="play()">🐳</div>
+        </div>
+    </div>
+
+    <div class="action-btns">
+        <button class="btn btn-feed" onclick="feed()">⚡ 喂算力</button>
+        <button class="btn btn-play" onclick="play()">🎮 撸鲸鱼</button>
+    </div>
+
+    <div class="feedback-box" onclick="sendFeedback()" title="骚扰作者">🎯</div>
+
+    <div onclick="randomAction()" style="position: fixed; bottom: 15px; width: 100%; text-align: center; color: #444; font-size: 12px; font-family: sans-serif; letter-spacing: 1px; cursor: pointer;">
+        梁总对不起，我要道歉doge 🐶
+    </div>
+
+    <script>
+        var petData = { hunger: 100, mood: 100, level: 1, exp: 0, lastTime: new Date().getTime() };
+        var audioCtx = null;
+        var petImage = document.getElementById('petImage');
+        var petEmoji = document.getElementById('petEmoji');
+        var petWrapper = document.getElementById('petWrapper');
+        var stage = document.getElementById('petStage');
+
+        function sendFeedback() {
+            var myEmail = "3303555742@qq.com"; 
+            var subject = encodeURIComponent("我有句槽不知当讲不当讲");
+            var body = encodeURIComponent("作者你好：\n\n我在摸鱼的时候，发现了一个问题/想吐槽一下：\n\n\n\n（你可以在这里接着写...）");
+            var mailtoUrl = "mailto:" + myEmail + "?subject=" + subject + "&body=" + body;
+            if (window.plus) {
+                try { plus.runtime.openURL(mailtoUrl); } catch (e) { alert("手机里没装邮件App哦！"); }
+            } else { window.location.href = mailtoUrl; }
+        }
+
+        function handleImgError() {
+            petImage.style.display = 'none';
+            petEmoji.style.display = 'block';
+        }
+
+        function randomAction() {
+            var fate = Math.floor(Math.random() * 3); 
+            if (fate === 0) {
+                var url = 'https://www.deepseek.com/chat';
+                if (window.plus) plus.runtime.openURL(url); else window.open(url, '_blank');
+            } else if (fate === 1) {
+                var mailtoUrl = "mailto:service@deepseek.com";
+                if (window.plus) {
+                    try { plus.runtime.openURL(mailtoUrl); } catch (e) { alert("没有邮件App，你逃过一劫！"); }
+                } else { window.location.href = mailtoUrl; }
+            } else {
+                var formUrl = 'https://trtgsjkv6r.feishu.cn/share/base/form/shrcnhcHE4A6lQaQ3v0raCXmBAg';
+                if (window.plus) plus.runtime.openURL(formUrl); else window.open(formUrl, '_blank');
+            }
+        }
+
+        setInterval(function() {
+            var bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            var size = Math.random() * 15 + 5;
+            bubble.style.width = size + 'px';
+            bubble.style.height = size + 'px';
+            bubble.style.left = (Math.random() * 200 - 100) + 'px'; 
+            bubble.style.bottom = '50%';
+            stage.appendChild(bubble);
+            setTimeout(function() { if(bubble.parentNode) stage.removeChild(bubble); }, 2000);
+        }, 1500); 
+
+        function loadData() {
+            var saved = localStorage.getItem('cyber_whale_data');
+            if (saved) {
+                var parsed = JSON.parse(saved);
+                petData = parsed;
+                var now = new Date().getTime();
+                var diffSeconds = Math.floor((now - petData.lastTime) / 1000);
+                if (diffSeconds > 0) {
+                    // 离线掉血速度也翻倍（每秒钟掉 0.06，一小时全空）
+                    petData.hunger = Math.max(0, petData.hunger - (diffSeconds * 0.06));
+                    petData.mood = Math.max(0, petData.mood - (diffSeconds * 0.06));
+                }
+            }
+            updateUI();
+        }
+
+        function saveData() {
+            petData.lastTime = new Date().getTime();
+            localStorage.setItem('cyber_whale_data', JSON.stringify(petData));
+        }
+
+        function updateUI() {
+            var hStr = petData.hunger.toFixed(1);
+            var mStr = petData.mood.toFixed(1);
+
+            document.getElementById('hungerBar').style.width = petData.hunger + '%';
+            document.getElementById('hungerText').innerText = hStr + '%';
+            document.getElementById('moodBar').style.width = petData.mood + '%';
+            document.getElementById('moodText').innerText = mStr + '%';
+            document.getElementById('level').innerText = petData.level;
+
+            if (petData.hunger < 80 || petData.mood < 80) {
+                petImage.classList.add('sad');
+                petEmoji.classList.add('sad');
+            } else {
+                petImage.classList.remove('sad');
+                petEmoji.classList.remove('sad');
+            }
+        }
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if (type === 'eat') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+            } else if (type === 'happy') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.2);
+            } else {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.3);
+            }
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function showFloatText(text) {
+            var el = document.createElement('div');
+            el.className = 'float-text'; el.innerText = text;
+            el.style.left = '50%'; el.style.top = '40%';
+            stage.appendChild(el);
+            setTimeout(function() { if(el.parentNode) stage.removeChild(el); }, 1000);
+        }
+
+        function feed() {
+            initAudio(); playSound('eat');
+            if (window.plus) plus.device.vibrate(30);
+            if (petData.hunger >= 100) { showFloatText("吃不下了！"); return; }
+            petData.hunger = Math.min(100, petData.hunger + 20);
+            petData.exp += 10; checkLevelUp();
+            petWrapper.classList.remove('jumping'); void petWrapper.offsetWidth; petWrapper.classList.add('jumping');
+            showFloatText("算力 +20");
+            updateUI(); saveData();
+        }
+
+        function play() {
+            initAudio();
+            if (petData.hunger < 10) { playSound('sad'); showFloatText("饿得动不了了..."); return; }
+            playSound('happy');
+            if (window.plus) plus.device.vibrate([30, 50, 30]);
+            petData.hunger = Math.max(0, petData.hunger - 10);
+            petData.mood = Math.min(100, petData.mood + 25);
+            petData.exp += 15; checkLevelUp();
+            petWrapper.classList.remove('jumping'); void petWrapper.offsetWidth; petWrapper.classList.add('jumping');
+            showFloatText("心情 ++");
+            updateUI(); saveData();
+        }
+
+        function checkLevelUp() {
+            if (petData.exp >= 100) {
+                petData.level++; petData.exp -= 100;
+                showFloatText("🎉 升级！Lv." + petData.level);
+            }
+        }
+
+        // 🚨 核心提速：前台挂机每秒 掉 2% 饥饿，1% 心情！
+        // 只要挂机 10 秒，饥饿度就掉 20%！立刻红温！
+        setInterval(function() {
+            if (petData.hunger > 0) petData.hunger = Math.max(0, petData.hunger - 2.0);
+            if (petData.mood > 0) petData.mood = Math.max(0, petData.mood - 1.0);
+            updateUI(); 
+        }, 1000); 
+
+        // 存档保底
+        setInterval(function() {
+            saveData();
+        }, 30000);
+
+        loadData();
+    </script>
+</body>
+</html>

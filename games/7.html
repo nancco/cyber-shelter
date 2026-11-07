@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>任意门</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; margin: 0; padding: 60px 20px 20px 20px; box-sizing: border-box;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .item {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .item:active { background-color: #333; }
+        
+        .icon { font-size: 32px; margin-bottom: 10px; display: block; }
+        .name { font-size: 14px; font-weight: bold; color: #fff; display: block; margin-bottom: 5px; }
+        .desc { font-size: 11px; color: #666; display: block; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="grid">
+        <!-- 1. DeepSeek -->
+        <div class="item" onclick="safeJump('https://chat.deepseek.com/')">
+            <span class="icon">🐳</span>
+            <span class="name">DeepSeek</span>
+            <span class="desc">点我聊聊天吃吃瓜</span>
+        </div>
+
+        <!-- 2. 中小学教育 -->
+        <div class="item" onclick="safeJump('https://basic.smartedu.cn/')">
+            <span class="icon">🏫</span>
+            <span class="name">中小学教育</span>
+            <span class="desc">国家出品</span>
+        </div>
+
+        <!-- 3. 百度百科 -->
+        <div class="item" onclick="safeJump('https://baike.baidu.com/')">
+            <span class="icon">🔍</span>
+            <span class="name">百度百科</span>
+            <span class="desc">查词条</span>
+        </div>
+
+        <!-- 4. B站 -->
+        <div class="item" onclick="safeJump('https://www.bilibili.com/')">
+            <span class="icon">📺</span>
+            <span class="name">B站主页</span>
+            <span class="desc">不小心就刷一天</span>
+        </div>
+
+        <!-- 5. 小红书 -->
+        <div class="item" onclick="safeJump('https://www.xiaohongshu.com/')">
+            <span class="icon">📕</span>
+            <span class="name">小红书</span>
+            <span class="desc">标记我的生活</span>
+        </div>
+
+        <!-- 6. 抖音 -->
+        <div class="item" onclick="safeJump('https://www.douyin.com/')">
+            <span class="icon">⏳</span>
+            <span class="name">抖音</span>
+            <span class="desc">时间黑洞</span>
+        </div>
+        
+        <!-- 7. 贴吧 -->
+        <div class="item" onclick="safeJump('https://tieba.baidu.com/')">
+            <span class="icon">👁️</span>
+            <span class="name">百度贴吧</span>
+            <span class="desc">在线对线</span>
+        </div>
+
+        <!-- 8. 微博 -->
+        <div class="item" onclick="safeJump('https://weibo.com/')">
+            <span class="icon">🌐</span>
+            <span class="name">微博</span>
+            <span class="desc">随时随地发现新鲜事</span>
+        </div>
+    </div>
+
+    <script>
+        // 🚀 绝对防弹跳转核心函数
+        function safeJump(url) {
+            // 手机震动反馈一下，证明点到了
+            if (window.plus) {
+                try { plus.device.vibrate(30); } catch(e) {}
+            }
+
+            // 如果是 HBuilderX 的 App 环境
+            if (window.plus) {
+                try {
+                    plus.runtime.openURL(url); // 强制唤起系统浏览器
+                } catch (e) {
+                    alert("跳转失败：" + e.message);
+                }
+            } else {
+                // 如果是电脑浏览器预览
+                window.open(url, '_blank');
+            }
+        }
+    </script>
+</body>
+</html>

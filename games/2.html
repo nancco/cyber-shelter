@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>经典贪吃蛇</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none; 
+        }
+        
+        .header {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #aaaaaa;
+            display: flex;
+            gap: 20px;
+        }
+        .score-board span { color: #fff; font-weight: bold; }
+
+        canvas {
+            background-color: #1e1e1e;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .back-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 9999;
+            color: #fff;
+            background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .d-pad button {
+            background-color: #333333;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .d-pad button:active { background-color: #555555; }
+
+        .btn-up { grid-column: 2; grid-row: 1; }
+        .btn-left { grid-column: 1; grid-row: 2; }
+        .btn-down { grid-column: 2; grid-row: 2; }
+        .btn-right { grid-column: 3; grid-row: 2; }
+
+        #game-over {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(18, 18, 18, 0.95);
+            padding: 25px 40px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        #game-over h2 { margin: 0 0 10px 0; color: #ff4757; font-size: 28px;}
+        #record-msg { margin: 0 0 15px 0; color: #ffd700; font-size: 16px; display: none; } /* 破纪录的金色提示 */
+        #game-over p { margin: 0 0 20px 0; color: #aaa; font-size: 14px;}
+        
+        #restart-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        #restart-btn:active { background: #555; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <!-- 计分板 -->
+    <div class="header">
+        <div class="score-board">得分: <span id="score">0</span></div>
+        <div class="score-board">最高: <span id="highScore">0</span></div>
+    </div>
+
+    <canvas id="gameCanvas" width="300" height="300"></canvas>
+
+    <div class="d-pad">
+        <button class="btn-up" onclick="changeDirection(0, -1)">↑</button>
+        <button class="btn-left" onclick="changeDirection(-1, 0)">←</button>
+        <button class="btn-down" onclick="changeDirection(0, 1)">↓</button>
+        <button class="btn-right" onclick="changeDirection(1, 0)">→</button>
+    </div>
+
+    <div id="game-over">
+        <h2>Game Over</h2>
+        <!-- 破纪录提示 -->
+        <h3 id="record-msg">🎉 破纪录啦！</h3>
+        <p>滑动屏幕或按方向键</p>
+        <button id="restart-btn" onclick="restartGame()">重新开始</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+        const gameOverScreen = document.getElementById('game-over');
+        const recordMsg = document.getElementById('record-msg');
+
+        const gridSize = 15; 
+        const tileCount = canvas.width / gridSize; 
+
+        let snake = [];
+        let food = { x: 0, y: 0 };
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let gameLoop;
+
+        // 读取本地存储的最高分 (如果没有，默认0)
+        let highScore = parseInt(localStorage.getItem('snakeHighScore')) || 0;
+        highScoreElement.innerText = highScore; // 初始显示
+
+        function initGame() {
+            snake = [
+                { x: 7, y: 7 },
+                { x: 6, y: 7 },
+                { x: 5, y: 7 }
+            ];
+            dx = 1; 
+            dy = 0;
+            score = 0;
+            scoreElement.innerText = score;
+            gameOverScreen.style.display = 'none';
+            recordMsg.style.display = 'none'; // 每次重开，先隐藏破纪录提示
+            placeFood();
+            if (gameLoop) clearInterval(gameLoop);
+            gameLoop = setInterval(update, 120); 
+        }
+
+        function placeFood() {
+            food.x = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            food.y = Math.floor(Math.random() * (tileCount - 4)) + 2;
+            for (let part of snake) {
+                if (part.x === food.x && part.y === food.y) {
+                    placeFood();
+                    return;
+                }
+            }
+        }
+
+        function update() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // 撞墙
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                return gameOver();
+            }
+
+            // 撞自己
+            for (let i = 0; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return gameOver();
+                }
+            }
+
+            snake.unshift(head);
+
+            // 吃到食物
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                scoreElement.innerText = score;
+                placeFood();
+            } else {
+                snake.pop(); 
+            }
+
+            draw();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#1e1e1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < snake.length; i++) {
+                if (i === 0) ctx.fillStyle = '#aaaaaa'; 
+                else ctx.fillStyle = '#ffffff';
+                ctx.fillRect(snake[i].x * gridSize, snake[i].y * gridSize, gridSize - 2, gridSize - 2);
+            }
+
+            ctx.fillStyle = '#ff4757'; 
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+        }
+
+        function gameOver() {
+            clearInterval(gameLoop);
+
+            // ====== 核心逻辑：比对最高分 ======
+            if (score > highScore) {
+                // 破纪录了！更新缓存并显示提示
+                highScore = score;
+                localStorage.setItem('snakeHighScore', highScore);
+                highScoreElement.innerText = highScore;
+                recordMsg.style.display = 'block'; // 显示金色破纪录提示
+            } else {
+                // 没破纪录，啥也不提示
+                recordMsg.style.display = 'none';
+            }
+
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function restartGame() {
+            initGame();
+        }
+
+        function changeDirection(newDx, newDy) {
+            if (dx === -newDx && dy === -newDy) return;
+            dx = newDx;
+            dy = newDy;
+        }
+
+        // 触屏滑动
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: false });
+
+        document.addEventListener('touchend', e => {
+            let touchEndX = e.changedTouches[0].screenX;
+            let touchEndY = e.changedTouches[0].screenY;
+            let diffX = touchEndX - touchStartX;
+            let diffY = touchEndY - touchStartY;
+
+            if (Math.abs(diffX) < 20 && Math.abs(diffY) < 20) return;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) changeDirection(1, 0);
+                else changeDirection(-1, 0);
+            } else {
+                if (diffY > 0) changeDirection(0, 1);
+                else changeDirection(0, -1);
+            }
+        }, { passive: false });
+
+        // 电脑键盘
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp') changeDirection(0, -1);
+            if (e.key === 'ArrowDown') changeDirection(0, 1);
+            if (e.key === 'ArrowLeft') changeDirection(-1, 0);
+            if (e.key === 'ArrowRight') changeDirection(1, 0);
+        });
+
+        initGame();
+    </script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博弹幕墙</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 0;
+            user-select: none; overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        /* ===== 弹幕滚动区 ===== */
+        #danmu-area {
+            flex: 1;
+            position: relative;
+            background-color: #000000;
+            overflow: hidden;
+            border-bottom: 2px solid #333;
+        }
+
+        /* 单条弹幕的样式 */
+        .danmu-item {
+            position: absolute;
+            white-space: nowrap;
+            font-size: 20px;
+            font-weight: bold;
+            will-change: transform;
+            /* 动画使用 CSS 关键帧，5-8秒随机 */
+        }
+
+        /* 弹幕从右侧出现，飘向左侧，直到完全移出屏幕 */
+        @keyframes floatLeft {
+            0% { transform: translateX(100vw); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* ===== 控制区 ===== */
+        .controls {
+            padding: 15px;
+            background-color: #121212;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+            background-color: #1e1e1e;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 12px 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+        }
+        .input-group button {
+            background-color: #00d2ff;
+            color: #000;
+            border: none;
+            padding: 0 25px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .input-group button:active { background-color: #0099cc; }
+
+        /* 预设弹幕快发区 */
+        .preset-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .preset-btn {
+            background-color: #1e1e1e;
+            color: #888;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .preset-btn:active { background-color: #333; color: #fff; }
+
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <!-- 弹幕展示区 -->
+    <div id="danmu-area"></div>
+
+    <!-- 控制区 -->
+    <div class="controls">
+        <div class="input-group">
+            <input type="text" id="danmuInput" placeholder="发一条赛博弹幕..." maxlength="30">
+            <button onclick="sendDanmu()">发射</button>
+        </div>
+        
+        <div class="preset-group">
+            <button class="preset-btn" onclick="quickSend('老板是傻X')">老板是傻X</button>
+            <button class="preset-btn" onclick="quickSend('我要涨工资')">我要涨工资</button>
+            <button class="preset-btn" onclick="quickSend('前方高能')">前方高能</button>
+            <button class="preset-btn" onclick="quickSend('好想下班')">好想下班</button>
+            <button class="preset-btn" onclick="quickSend('摸鱼中...')">摸鱼中...</button>
+        </div>
+    </div>
+
+    <script>
+        // 兜底防白屏
+        window.onerror = function(msg) {
+            var area = document.getElementById('danmu-area');
+            if(area) area.innerHTML = "<div style='color:red;padding:20px;'>出错啦: " + msg + "</div>";
+            return false;
+        };
+
+        var danmuArea = document.getElementById('danmu-area');
+        var danmuInput = document.getElementById('danmuInput');
+        var audioCtx = null;
+
+        // 赛博荧光色库
+        var colors = [
+            '#00d2ff', // 极客蓝
+            '#ff4757', // 警告红
+            '#2ed573', // 黑客绿
+            '#ffa502', // 赛博黄
+            '#e056fd', // 霓虹紫
+            '#ffffff'  // 纯白
+        ];
+
+        function initAudio() {
+            try {
+                if (!audioCtx) {
+                    var AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+        }
+
+        // 发射音效（像激光枪一样的“啾”声）
+        function playShootSound() {
+            try {
+                if (!audioCtx) return;
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+                
+                if (window.plus) plus.device.vibrate(20);
+            } catch (e) {}
+        }
+
+        // 发送弹幕核心逻辑
+        function fire(text) {
+            if (!text || text.trim() === '') return;
+            initAudio();
+            playShootSound();
+
+            var el = document.createElement('div');
+            el.className = 'danmu-item';
+            el.innerText = text;
+
+            // 随机颜色
+            var color = colors[Math.floor(Math.random() * colors.length)];
+            el.style.color = color;
+            // 加上同色发光效果，赛博感拉满
+            el.style.textShadow = '0 0 10px ' + color;
+
+            // 随机垂直位置 (防止弹幕全挤在一条线上)
+            // 为了简单，把高度分成 80% 的可用区域
+            var topPercent = Math.random() * 80 + 10;
+            el.style.top = topPercent + '%';
+
+            // 随机速度 (5秒 - 9秒)
+            var duration = Math.random() * 4 + 5;
+            el.style.animation = 'floatLeft ' + duration + 's linear forwards';
+
+            // 插入页面
+            danmuArea.appendChild(el);
+
+            // 动画结束后销毁 DOM，释放内存
+            setTimeout(function() {
+                if (el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            }, duration * 1000);
+        }
+
+        // 点击按钮发送
+        function sendDanmu() {
+            var text = danmuInput.value.trim();
+            if (text) {
+                fire(text);
+                danmuInput.value = '';
+            }
+        }
+
+        // 快捷键直接发送
+        function quickSend(text) {
+            fire(text);
+        }
+
+        // 绑定回车键
+        danmuInput.addEventListener('keydown', function(e) {
+            if (e.keyCode === 13 || e.key === 'Enter') {
+                sendDanmu();
+            }
+        });
+
+        // 初始演示：加载时自己飘几条弹幕出来暖场
+        setTimeout(function() { fire('欢迎来到这里'); }, 500);
+        setTimeout(function() { fire('梁总对不起'); }, 1200);
+        setTimeout(function() { fire('摸鱼中...'); }, 2000);
+
+    </script>
+</body>
+</html>

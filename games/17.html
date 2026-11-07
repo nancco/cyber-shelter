@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博刮刮乐</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 24px; color: #ffd700; margin: 0 0 10px 0; letter-spacing: 2px;}
+        .header p { font-size: 14px; color: #888; margin: 0;}
+
+        /* 卡片容器 */
+        .card-wrapper {
+            position: relative;
+            width: 300px;
+            height: 200px;
+            background-color: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            overflow: hidden;
+            /* 关键：防止滑动屏幕时页面跟着滚动 */
+            touch-action: none; 
+        }
+
+        /* 底层文字 */
+        #resultText {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            text-align: center; padding: 20px; box-sizing: border-box;
+            font-size: 22px; font-weight: bold; line-height: 1.5;
+            z-index: 1;
+        }
+
+        /* 遮盖层（网格） */
+        #coverGrid {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: grid;
+            grid-template-columns: repeat(15, 1fr); /* 15列 */
+            grid-template-rows: repeat(10, 1fr);    /* 10行 */
+            z-index: 10;
+            transition: opacity 0.5s; /* 最终揭晓时的渐隐 */
+        }
+
+        /* 每一个小方块 */
+        .grid-cell {
+            background-color: #444; /* 刮层颜色 */
+            border: 1px solid #333; /* 网格线 */
+            transition: opacity 0.2s;
+            box-sizing: border-box;
+        }
+
+        /* 刮开的方块 */
+        .grid-cell.scratched {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* 操作按钮 */
+        .action-btn {
+            margin-top: 30px;
+            background-color: #333; color: #fff; border: 1px solid #555;
+            padding: 12px 30px; border-radius: 12px; font-size: 16px; font-weight: bold;
+            display: none;
+        }
+        .action-btn:active { background-color: #555; }
+
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="header">
+        <h1>赛博刮刮乐</h1>
+        <p>手指疯狂摩擦，刮开你的天命</p>
+    </div>
+
+    <div class="card-wrapper" id="cardWrapper">
+        <div id="resultText">准备中...</div>
+        <div id="coverGrid"></div>
+    </div>
+
+    <button class="action-btn" id="resetBtn" onclick="initGame()">再来一张</button>
+
+    <script>
+        // 兜底防报错
+        window.onerror = function(msg) {
+            document.getElementById('resultText').innerHTML = "<span style='color:red'>出错啦: " + msg + "</span>";
+            return false;
+        };
+
+        var coverGrid = document.getElementById('coverGrid');
+        var resultTextEl = document.getElementById('resultText');
+        var resetBtn = document.getElementById('resetBtn');
+        var wrapper = document.getElementById('cardWrapper');
+
+        var totalCells = 150; // 15列 x 10行
+        var scratchedCells = 0;
+        var isDrawing = false;
+        var hasWon = false;
+        var audioCtx = null;
+        var lastSoundTime = 0;
+
+        // 22条扎心文案
+        var prizes = [
+            { text: "🎉 特等奖：老板失联一天！", color: "#ffd700" },
+            { text: "🥇 一等奖：带薪拉屎1小时！", color: "#ffd700" },
+            { text: "🥈 二等奖：今天准点下班！", color: "#4caf50" },
+            { text: "🥉 三等奖：咖啡免单一次！", color: "#4caf50" },
+            { text: "🎁 惊喜奖：摸鱼不被抓！", color: "#4caf50" },
+            { text: "💔 安慰奖：谢谢惠顾，继续搬砖！", color: "#888888" },
+            { text: "💔 安慰奖：你的花呗该还了！", color: "#ff4757" },
+            { text: "🖤 扎心奖：今晚必失眠！", color: "#ff4757" },
+            { text: "🖤 扎心奖：明天周六要加班！", color: "#ff4757" },
+            { text: "🖤 扎心奖：老板在看你！", color: "#ff4757" },
+            { text: "🤡 谢谢参与：纯种牛马认证。", color: "#888888" },
+            { text: "🤡 谢谢参与：洗洗睡吧，梦里啥都有。", color: "#888888" },
+            { text: "🌟 隐藏奖：获得“背锅侠”称号！", color: "#ff4757" },
+            { text: "🌟 隐藏奖：你是个好人。", color: "#888888" },
+            { text: "🗑️ 最终解释权归赛博避难所所有。", color: "#888888" },
+            { text: "🕳️ 奖：掉进赛博黑洞，原地装死。", color: "#9c27b0" },
+            { text: "🥤 奖：奖励自己喝一杯白开水。", color: "#4a9eff" },
+            { text: "🛌 奖：今晚可以睡个好觉（骗你的）。", color: "#ff4757" },
+            { text: "💸 奖：扣除本月工资（赛博版）。", color: "#ff4757" },
+            { text: "🔪 奖：获得“明天不用来了”大礼包。", color: "#ff4757" },
+            { text: "🐶 奖：梁总拍了拍你的肩膀。", color: "#ffd700" },
+            { text: "🌚 奖：发现你的真实身份是NPC。", color: "#9c27b0" }
+        ];
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 摩擦音效
+        function playScratchSound() {
+            if (!audioCtx) return;
+            var now = new Date().getTime();
+            if (now - lastSoundTime < 80) return; // 限制发声频率
+            lastSoundTime = now;
+
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(Math.random() * 200 + 300, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        // 中奖音效
+        function playWinSound() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+            
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            
+            if (window.plus) plus.device.vibrate([50, 50, 100]);
+        }
+
+        // 初始化网格
+        function initGame() {
+            hasWon = false;
+            isDrawing = false;
+            scratchedCells = 0;
+            resetBtn.style.display = 'none';
+            coverGrid.style.opacity = 1;
+            coverGrid.innerHTML = ''; // 清空
+
+            // 随机文案
+            var prize = prizes[Math.floor(Math.random() * prizes.length)];
+            resultTextEl.innerText = prize.text;
+            resultTextEl.style.color = prize.color;
+
+            // 生成 150 个格子
+            for (var i = 0; i < totalCells; i++) {
+                var cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                coverGrid.appendChild(cell);
+            }
+        }
+
+        // 刮开一个格子
+        function scratchElement(el) {
+            if (el && el.classList.contains('grid-cell') && !el.classList.contains('scratched')) {
+                el.classList.add('scratched');
+                scratchedCells++;
+                playScratchSound();
+                checkProgress();
+            }
+        }
+
+        // 手指滑动时，利用 elementFromPoint 获取划过位置的格子
+        function handleMove(e) {
+            if (!isDrawing || hasWon) return;
+            e.preventDefault(); // 阻止屏幕滚动
+
+            var clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            // 获取当前坐标下的 DOM 元素
+            var el = document.elementFromPoint(clientX, clientY);
+            scratchElement(el);
+        }
+
+        // 检查刮开进度
+        function checkProgress() {
+            // 刮开超过 40% (60个格子) 自动全开
+            if (scratchedCells > 60) {
+                revealAll();
+            }
+        }
+
+        // 彻底揭晓
+        function revealAll() {
+            if (hasWon) return;
+            hasWon = true;
+            isDrawing = false;
+            
+            // 遮盖层渐隐
+            coverGrid.style.opacity = 0;
+            
+            setTimeout(function() {
+                coverGrid.style.display = 'none';
+                resetBtn.style.display = 'block';
+                playWinSound();
+            }, 500);
+        }
+
+        // 事件绑定
+        wrapper.addEventListener('touchstart', function(e) { 
+            isDrawing = true; 
+            initAudio();
+            handleMove(e); 
+        }, { passive: false });
+        
+        wrapper.addEventListener('touchmove', handleMove, { passive: false });
+        wrapper.addEventListener('touchend', function() { isDrawing = false; });
+
+        wrapper.addEventListener('mousedown', function(e) { isDrawing = true; initAudio(); handleMove(e); });
+        wrapper.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', function() { isDrawing = false; });
+
+        // 启动
+        initGame();
+    </script>
+</body>
+</html>

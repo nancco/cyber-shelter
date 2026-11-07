@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>防沉迷打工闹钟</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
+        .back-btn { position: fixed; top: 15px; left: 15px; z-index: 9999; color: #fff; background: rgba(50, 50, 50, 0.8); padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px; }
+        .current-time { color: #555; font-size: 16px; margin-bottom: 20px; letter-spacing: 2px; }
+        .time-picker { display: flex; align-items: center; background-color: #1e1e1e; padding: 20px 30px; border-radius: 16px; border: 1px solid #333; margin-bottom: 30px; }
+        .time-col { display: flex; flex-direction: column; align-items: center; }
+        .time-col button { background: none; border: none; color: #555; font-size: 24px; cursor: pointer; padding: 10px; }
+        .time-col button:active { color: #fff; }
+        .time-num { font-size: 48px; font-weight: bold; color: #fff; width: 80px; text-align: center; font-family: monospace; }
+        .colon { font-size: 48px; font-weight: bold; color: #ff4757; margin: 0 10px; margin-top: -5px; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .btn-group { display: flex; gap: 15px; margin-top: 10px; }
+        button.action-btn { background-color: #333; color: #fff; border: none; padding: 15px 30px; font-size: 18px; border-radius: 12px; font-weight: bold; }
+        .btn-danger { background-color: #1e1e1e; color: #ff4757; border: 1px solid #ff4757;}
+        .status { margin-top: 30px; color: #aaaaaa; font-size: 14px; text-align: center; line-height: 1.5;}
+
+        #alarm-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #1a0000; border: 10px solid #ff4757; box-sizing: border-box; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; animation: flash 0.5s infinite; }
+        @keyframes flash { 0%, 100% { background-color: #1a0000; } 50% { background-color: #330000; } }
+        #alarm-screen h1 { color: #ff4757; font-size: 50px; margin-bottom: 10px; font-weight: bold; text-shadow: 0 0 20px #ff4757;}
+        #alarm-screen p { font-size: 18px; color: #aaaaaa; text-align: center; line-height: 1.5; margin-bottom: 40px;}
+        #stop-btn { background-color: #ffffff; color: #ff4757; border: none; padding: 20px 50px; font-size: 24px; font-weight: bold; border-radius: 50px; box-shadow: 0 0 30px #ff4757; animation: pulse 0.5s infinite alternate; }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.1); } }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+    <div class="current-time" id="nowTime">现在时间 --:--</div>
+
+    <div class="time-picker">
+        <div class="time-col">
+            <button onclick="changeTime('h', 1)">+</button>
+            <div class="time-num" id="hourDisplay">23</div>
+            <button onclick="changeTime('h', -1)">-</button>
+        </div>
+        <div class="colon">:</div>
+        <div class="time-col">
+            <button onclick="changeTime('m', 1)">+</button>
+            <div class="time-num" id="minDisplay">00</div>
+            <button onclick="changeTime('m', -1)">-</button>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="action-btn" onclick="setAlarm()">定下契约</button>
+        <button class="action-btn btn-danger" onclick="cancelAlarm()">取消</button>
+    </div>
+
+    <div class="status" id="statusText">设定时间后，保持亮屏，到点执行物理驱逐。</div>
+
+    <!-- 惩罚遮罩 -->
+    <div id="alarm-screen">
+        <h1>时间到！</h1>
+        <p>你定的契约已生效，准备强制关机...</p>
+        <button id="stop-btn" onclick="stopAlarm()">我错了，解除警报</button>
+    </div>
+
+    <script>
+        let targetH = 23;
+        let targetM = 0;
+        let isSet = false;
+        let checkInterval = null;
+        let alarmAudio = null;
+        let autoQuitTimeout = null;
+
+        // 顶部时间更新
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('nowTime').innerText = 
+                `现在时间 ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        }, 1000);
+
+        function changeTime(type, value) {
+            if (isSet) return;
+            if (type === 'h') {
+                targetH += value;
+                if (targetH > 23) targetH = 0;
+                if (targetH < 0) targetH = 23;
+                document.getElementById('hourDisplay').innerText = targetH.toString().padStart(2, '0');
+            } else {
+                targetM += value;
+                if (targetM > 55) targetM = 0;
+                if (targetM < 0) targetM = 55;
+                document.getElementById('minDisplay').innerText = targetM.toString().padStart(2, '0');
+            }
+        }
+
+        function setAlarm() {
+            isSet = true;
+            const targetTime = targetH.toString().padStart(2, '0') + ':' + targetM.toString().padStart(2, '0');
+            
+            // 初始化一个专门用来循环的音频（使用一段极短的 Base64 警报声）
+            if (!alarmAudio) {
+                alarmAudio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YV9vT18AAAAA//////////////////////////////////////////8=");
+                alarmAudio.loop = true; // 核心：开启循环，一直响！
+            }
+
+            document.getElementById('statusText').innerText = `契约已生效！\n当前设定：${targetTime}\n(保持App在前台，否则安卓会冻结计时器)`;
+            
+            if (checkInterval) clearInterval(checkInterval);
+
+            // 实时死盯系统时间，不用倒计时，直接用当前时间去撞你的设定时间
+            checkInterval = setInterval(() => {
+                const now = new Date();
+                const currentH = now.getHours().toString().padStart(2, '0');
+                const currentM = now.getMinutes().toString().padStart(2, '0');
+                const currentS = now.getSeconds();
+
+                // 当小时和分钟对上，且秒数为0时触发
+                if (currentH === targetH.toString().padStart(2, '0') && currentM === targetM.toString().padStart(2, '0') && currentS === 0) {
+                    triggerAlarm();
+                }
+            }, 500); // 半秒检查一次，绝不漏掉
+        }
+
+        function cancelAlarm() {
+            if (checkInterval) clearInterval(checkInterval);
+            isSet = false;
+            document.getElementById('statusText').innerText = "契约已取消。";
+        }
+
+        function triggerAlarm() {
+            clearInterval(checkInterval);
+            isSet = false;
+            
+            // 显示全屏红屏
+            document.getElementById('alarm-screen').style.display = 'flex';
+            
+            // 疯狂播放警笛声
+            if (alarmAudio) {
+                alarmAudio.play().catch(e => console.log("浏览器限制了自动播放"));
+            }
+
+            // 手机端：疯狂震动 + 5秒后闪退
+            if (window.plus) {
+                // 每 500 毫秒震动一次
+                let vibrateTimer = setInterval(() => { plus.device.vibrate(500); }, 500);
+                
+                // 5 秒后强制杀进程
+                autoQuitTimeout = setTimeout(() => {
+                    clearInterval(vibrateTimer);
+                    plus.runtime.quit(); // 真的卡出去了！
+                }, 5000);
+            } else {
+                document.getElementById('statusText').innerText = "【电脑端】请点白色按钮停止。手机上会5秒后闪退。";
+            }
+        }
+
+        function stopAlarm() {
+            clearTimeout(autoQuitTimeout);
+            if (alarmAudio) {
+                alarmAudio.pause();
+                alarmAudio.currentTime = 0;
+            }
+            document.getElementById('alarm-screen').style.display = 'none';
+            cancelAlarm();
+            document.getElementById('statusText').innerText = "警报已解除，你又活下来了。";
+        }
+    </script>
+</body>
+</html>

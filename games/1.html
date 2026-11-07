@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>普通计算器</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent; /* 去除手机点击蓝框 */
+        }
+        .calc-box {
+            width: 90%;
+            max-width: 320px;
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+        }
+        
+        /* 音量开关按钮 */
+        .sound-toggle {
+            position: absolute;
+            top: -30px;
+            right: 0;
+            color: #555;
+            font-size: 20px;
+            cursor: pointer;
+            text-decoration: none;
+            background: none;
+            border: none;
+            padding: 5px;
+        }
+        .sound-toggle:active { color: #fff; }
+
+        .screen {
+            width: 100%;
+            height: 70px;
+            background-color: #121212;
+            color: #ffffff;
+            font-size: 36px;
+            text-align: right;
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 10px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        .keys {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        button {
+            height: 60px;
+            background-color: #333333;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 22px;
+            transition: background-color 0.1s;
+        }
+        button:active {
+            background-color: #555555;
+        }
+        .equals {
+            background-color: #ffffff;
+            color: #121212;
+        }
+        .equals:active {
+            background-color: #aaaaaa;
+        }
+        .zero {
+            grid-column: span 2;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" style="position: fixed; top: 15px; left: 15px; z-index: 9999; color: #fff; background: rgba(50, 50, 50, 0.8); padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;">← 返回</a>
+
+    <div class="calc-box">
+        <!-- 音量切换按钮 -->
+        <button class="sound-toggle" id="soundBtn" onclick="toggleSound()">🔊</button>
+
+        <input type="text" class="screen" id="screen" value="0" readonly>
+        
+        <div class="keys">
+            <button onclick="handleKey('C', clearScreen)">C</button>
+            <button onclick="handleKey('←', del)">←</button>
+            <button onclick="handleKey('%', () => input('%'))">%</button>
+            <button onclick="handleKey('÷', () => input('/'))">÷</button>
+            
+            <button onclick="handleKey('7', () => input('7'))">7</button>
+            <button onclick="handleKey('8', () => input('8'))">8</button>
+            <button onclick="handleKey('9', () => input('9'))">9</button>
+            <button onclick="handleKey('×', () => input('*'))">×</button>
+            
+            <button onclick="handleKey('4', () => input('4'))">4</button>
+            <button onclick="handleKey('5', () => input('5'))">5</button>
+            <button onclick="handleKey('6', () => input('6'))">6</button>
+            <button onclick="handleKey('-', () => input('-'))">-</button>
+            
+            <button onclick="handleKey('1', () => input('1'))">1</button>
+            <button onclick="handleKey('2', () => input('2'))">2</button>
+            <button onclick="handleKey('3', () => input('3'))">3</button>
+            <button onclick="handleKey('+', () => input('+'))">+</button>
+            
+            <button class="zero" onclick="handleKey('0', () => input('0'))">0</button>
+            <button onclick="handleKey('.', () => input('.'))">.</button>
+            <button class="equals" onclick="handleKey('=', calculate)">=</button>
+        </div>
+    </div>
+
+    <script>
+        const screen = document.getElementById('screen');
+        const soundBtn = document.getElementById('soundBtn');
+        
+        // 音效和震动开关（默认开启）
+        let isSoundOn = true;
+        let audioCtx = null;
+
+        // 初始化/获取音频上下文
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            // 浏览器策略：必须在用户点击后才能激活声音
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 统一处理按键事件（加入音效和震动）
+        function handleKey(keyName, action) {
+            if (isSoundOn) {
+                // 1. 播放合成的“滴”声
+                if (audioCtx) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine'; // 正弦波，声音比较清脆
+                    osc.frequency.setValueAtTime(1200, audioCtx.currentTime); // 1200Hz，类似老式电子表
+                    
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime); // 音量不要太大
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); // 0.05秒内极速衰减
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.05);
+                }
+
+                // 2. 触发手机震动（HBuilderX环境下）
+                if (window.plus) {
+                    plus.device.vibrate(30); // 短促震动30毫秒
+                } else if (navigator.vibrate) {
+                    navigator.vibrate(30); // 浏览器预览时的震动
+                }
+            }
+
+            // 执行原本的计算逻辑
+            action();
+        }
+
+        // 切换音效开关
+        function toggleSound() {
+            isSoundOn = !isSoundOn;
+            soundBtn.innerText = isSoundOn ? '🔊' : '🔇';
+            
+            // 如果开启，顺便初始化一下音频
+            if (isSoundOn) {
+                initAudio();
+            }
+        }
+
+        // 以下为原本的计算逻辑
+        function clearScreen() {
+            screen.value = '0';
+        }
+
+        function del() {
+            if (screen.value.length > 1) {
+                screen.value = screen.value.slice(0, -1);
+            } else {
+                screen.value = '0';
+            }
+        }
+
+        function input(val) {
+            if (screen.value === '0' && val !== '.') {
+                screen.value = val;
+            } else {
+                screen.value += val;
+            }
+        }
+
+        function calculate() {
+            try {
+                let exp = screen.value.replace(/×/g, '*').replace(/÷/g, '/');
+                let result = eval(exp);
+                screen.value = Number(result.toFixed(8)).toString();
+            } catch (e) {
+                screen.value = 'Error';
+            }
+        }
+
+        // 首次点击页面激活音频（防止浏览器拦截）
+        document.body.addEventListener('touchstart', initAudio, { once: true });
+        document.body.addEventListener('mousedown', initAudio, { once: true });
+    </script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博木鱼</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+        
+        /* 顶部计分板和按钮 */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .score-board { font-size: 24px; color: #ffd700; font-family: monospace; }
+        
+        /* 清空按钮 */
+        .clear-btn {
+            background-color: #1e1e1e; color: #ff4757; border: 1px solid #333;
+            padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+        }
+        .clear-btn:active { background-color: #333; }
+
+        /* 纯 CSS 画的木鱼 */
+        .muyu-container {
+            position: relative;
+            width: 200px; height: 200px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10; /* 确保层级在最上面 */
+        }
+        .muyu {
+            width: 160px; height: 140px;
+            background-color: #333333;
+            border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+            border: 2px solid #555;
+            box-shadow: inset -10px -10px 20px rgba(0,0,0,0.5), 0 10px 20px rgba(0,0,0,0.8);
+            position: relative;
+            transition: transform 0.05s;
+            pointer-events: none; /* 防止木鱼挡住点击事件 */
+        }
+        .muyu::after {
+            content: ''; position: absolute;
+            top: 50%; left: 20%; width: 60%; height: 8px;
+            background-color: #121212; border-radius: 5px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
+        }
+        .stick {
+            position: absolute; right: 10px; top: 10px;
+            width: 80px; height: 15px; background-color: #8b5a2b;
+            border-radius: 10px; transform-origin: right center;
+            transform: rotate(-45deg); transition: transform 0.05s;
+            pointer-events: none; /* 防止木棍挡住点击事件 */
+        }
+        
+        .muyu-container:active .muyu { transform: scale(0.95); }
+        .muyu-container:active .stick { transform: rotate(-10deg); }
+
+        /* 飘字动画 */
+        .float-text {
+            position: absolute; 
+            color: #ffd700; font-size: 24px; font-weight: bold;
+            pointer-events: none; /* 飘字绝不能挡住下一次点击 */
+            animation: floatUp 0.8s ease-out forwards;
+            z-index: 99;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -150%) scale(1.5); }
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="top-bar">
+        <div class="score-board">功德: <span id="merit">0</span></div>
+        <button class="clear-btn" onclick="clearMerit()">重置功德</button>
+    </div>
+
+    <!-- 注意：去掉了内联的 onclick -->
+    <div class="muyu-container" id="muyuArea">
+        <div class="stick"></div>
+        <div class="muyu"></div>
+    </div>
+
+    <script>
+        var merit = parseInt(localStorage.getItem('muyu_merit')) || 0;
+        var meritEl = document.getElementById('merit');
+        var muyuArea = document.getElementById('muyuArea');
+        var audioCtx = null;
+        
+        meritEl.innerText = merit;
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playMuyuSound() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+            
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            
+            if (window.plus) plus.device.vibrate(30);
+            else if (navigator.vibrate) navigator.vibrate(30);
+        }
+
+        // 核心敲击逻辑，不再依赖点击坐标
+        function hitMuyu() {
+            initAudio();
+            playMuyuSound();
+            
+            merit++;
+            meritEl.innerText = merit;
+            localStorage.setItem('muyu_merit', merit);
+
+            // 固定从木鱼正中心飘出
+            var floatText = document.createElement('div');
+            floatText.className = 'float-text';
+            floatText.innerText = '功德+1';
+            floatText.style.left = '50%';
+            floatText.style.top = '50%';
+            
+            muyuArea.appendChild(floatText);
+            setTimeout(function() { 
+                if(floatText.parentNode) muyuArea.removeChild(floatText); 
+            }, 800);
+        }
+
+        // 直接监听触摸事件，手机端绝对秒触发
+        muyuArea.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // 阻止手机默认的滚动或点击穿透
+            hitMuyu();
+        });
+
+        // 为了兼容电脑端预览
+        muyuArea.addEventListener('mousedown', function(e) {
+            if(e.button === 0) hitMuyu();
+        });
+
+        // 极简清空
+        function clearMerit() {
+            merit = 0;
+            meritEl.innerText = merit;
+            localStorage.setItem('muyu_merit', 0); 
+        }
+    </script>
+</body>
+</html>

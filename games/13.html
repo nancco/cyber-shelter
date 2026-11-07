@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博求签</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        /* 签筒 */
+        .tube-wrapper {
+            width: 120px; height: 180px;
+            background-color: #333;
+            border-radius: 10px 10px 50px 50px;
+            border: 2px solid #555;
+            position: relative;
+            cursor: pointer;
+            display: flex; justify-content: center;
+            box-shadow: inset 0 -20px 30px rgba(0,0,0,0.8), 0 10px 20px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+
+        /* 里面的签子 */
+        .stick {
+            width: 8px; height: 120px;
+            background-color: #e0cba8;
+            position: absolute; top: -40px;
+            border-radius: 4px;
+        }
+        .stick:nth-child(1) { left: 20px; transform: rotate(-5deg); }
+        .stick:nth-child(2) { left: 40px; transform: rotate(2deg); }
+        .stick:nth-child(3) { left: 60px; transform: rotate(-2deg); }
+        .stick:nth-child(4) { left: 80px; transform: rotate(5deg); }
+
+        .hint {
+            margin-top: 40px; color: #555; font-size: 14px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* 摇晃动画 */
+        .shaking {
+            animation: shake 0.5s infinite;
+        }
+        @keyframes shake {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(-10deg); }
+            50% { transform: rotate(0deg); }
+            75% { transform: rotate(10deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        /* 结果弹窗 */
+        .result-card {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            width: 80%; max-width: 300px;
+            background-color: #1a1a1a;
+            border: 2px solid #ffd700;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.2);
+            z-index: 100;
+        }
+        .result-card.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+        .luck-title {
+            font-size: 32px; color: #ffd700; font-weight: bold;
+            margin-bottom: 15px; letter-spacing: 5px;
+        }
+        .luck-desc {
+            font-size: 16px; color: #ccc; line-height: 1.6;
+        }
+        .close-btn {
+            margin-top: 25px; background-color: #333; color: #fff;
+            border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px;
+        }
+        .close-btn:active { background-color: #555; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="tube-wrapper" id="tube">
+        <div class="stick"></div><div class="stick"></div><div class="stick"></div><div class="stick"></div>
+    </div>
+
+    <div class="hint" id="hintText">点击签筒，心诚则灵</div>
+
+    <!-- 结果弹窗 -->
+    <div class="result-card" id="resultCard">
+        <div class="luck-title" id="luckTitle">大吉</div>
+        <div class="luck-desc" id="luckDesc">今天适合带薪拉屎。</div>
+        <button class="close-btn" onclick="closeCard()">谢天谢地</button>
+    </div>
+
+    <script>
+        var tube = document.getElementById('tube');
+        var hintText = document.getElementById('hintText');
+        var resultCard = document.getElementById('resultCard');
+        var luckTitle = document.getElementById('luckTitle');
+        var luckDesc = document.getElementById('luckDesc');
+        var audioCtx = null;
+        var isShaking = false;
+
+        // 赛博签文数据库
+        var fortunes = [
+            { title: "大吉", desc: "今天老板不在公司，放心摸鱼。" },
+            { title: "大吉", desc: "你点的外卖，老板会多给你加个蛋。" },
+            { title: "中吉", desc: "今天适合带薪拉屎，蹲久一点。" },
+            { title: "中吉", desc: "虽然工作很烦，但今天没有人找你背锅。" },
+            { title: "小吉", desc: "你心里想的那个他/她，刚好也在想你（的钱）。" },
+            { title: "平", desc: "无事发生，平安是福，准时下班。" },
+            { title: "凶", desc: "今天不宜上班，建议直接请假。" },
+            { title: "大凶", desc: "有锅要背，赶紧跑路！" }
+        ];
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 摇晃签筒的沙沙声
+        function playShakeSound() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.2);
+            
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function shake() {
+            if (isShaking) return;
+            isShaking = true;
+            initAudio();
+            
+            tube.classList.add('shaking');
+            hintText.innerText = "菩萨正在查阅数据库...";
+
+            // 播放三次沙沙声
+            playShakeSound();
+            setTimeout(playShakeSound, 200);
+            setTimeout(playShakeSound, 400);
+
+            if (window.plus) plus.device.vibrate([100, 100, 100, 100, 100]);
+            else if (navigator.vibrate) navigator.vibrate([100, 100, 100, 100, 100]);
+
+            // 1.5秒后出结果
+            setTimeout(function() {
+                tube.classList.remove('shaking');
+                
+                // 随机抽签
+                var randomFortune = fortunes[Math.floor(Math.random() * fortunes.length)];
+                luckTitle.innerText = randomFortune.title;
+                luckDesc.innerText = randomFortune.desc;
+
+                // 根据吉凶改变颜色
+                if (randomFortune.title === "大凶" || randomFortune.title === "凶") {
+                    luckTitle.style.color = "#ff4757";
+                    resultCard.style.borderColor = "#ff4757";
+                    resultCard.style.boxShadow = "0 0 50px rgba(255, 71, 87, 0.2)";
+                } else {
+                    luckTitle.style.color = "#ffd700";
+                    resultCard.style.borderColor = "#ffd700";
+                    resultCard.style.boxShadow = "0 0 50px rgba(255, 215, 0, 0.2)";
+                }
+
+                resultCard.classList.add('show');
+                hintText.innerText = "点击签筒，心诚则灵";
+                isShaking = false;
+            }, 1500);
+        }
+
+        function closeCard() {
+            resultCard.classList.remove('show');
+        }
+
+        // 移动端和 PC 端监听
+        tube.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            shake();
+        });
+        tube.addEventListener('mousedown', function(e) {
+            if(e.button === 0) shake();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博命运转盘</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; margin: 0; padding: 20px 0; box-sizing: border-box; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 24px; color: #ffd700; margin: 0 0 10px 0; letter-spacing: 2px;}
+
+        /* 转盘区域 */
+        .wheel-container {
+            position: relative; width: 260px; height: 260px;
+            margin-bottom: 30px;
+        }
+
+        /* 顶部指针 */
+        .pointer {
+            position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #ff4757;
+            z-index: 20;
+        }
+
+        /* 转盘本体 */
+        .wheel {
+            width: 100%; height: 100%; border-radius: 50%;
+            border: 6px solid #333;
+            background-color: #1e1e1e;
+            position: relative;
+            overflow: hidden;
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.1, 1);
+        }
+
+        /* 扇形块（不用 conic-gradient，用旋转的绝对定位块） */
+        .slice {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            /* 利用 clip-path 切割扇形 */
+            clip-path: polygon(50% 50%, 100% 0, 100% 100%);
+            transform-origin: 50% 50%;
+        }
+
+        /* 文字 */
+        .wheel-text {
+            position: absolute; top: 50%; left: 50%;
+            font-size: 14px; font-weight: bold; color: #fff;
+            transform-origin: 0 0;
+            white-space: nowrap;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* 控制区域 */
+        .controls { width: 85%; max-width: 320px; }
+
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .input-group input {
+            flex: 1; background-color: #1e1e1e; color: #fff;
+            border: 1px solid #333; padding: 12px; border-radius: 10px;
+            font-size: 15px; outline: none;
+        }
+        .input-group button {
+            background-color: #333; color: #fff; border: none;
+            padding: 0 20px; border-radius: 10px; font-size: 15px; font-weight: bold;
+        }
+
+        .action-btns { display: flex; gap: 10px; }
+        .btn {
+            flex: 1; padding: 15px 0; border: none; border-radius: 12px;
+            font-size: 16px; font-weight: bold;
+        }
+        .btn-start { background-color: #ff4757; color: #fff; }
+        .btn-start:disabled { background-color: #333; color: #666; }
+        .btn-clear { background-color: #1e1e1e; color: #888; border: 1px solid #333; flex: 0.4; }
+
+        .hint-text { text-align: center; font-size: 12px; color: #666; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="header">
+        <h1>命运转盘</h1>
+    </div>
+
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <div class="wheel" id="wheel"></div>
+    </div>
+
+    <div class="controls">
+        <div class="input-group">
+            <input type="text" id="optionInput" placeholder="输入选项 (最多8个)" maxlength="10">
+            <button onclick="addOption()">添加</button>
+        </div>
+        
+        <div class="action-btns">
+            <button class="btn btn-clear" onclick="clearOptions()">清空</button>
+            <button class="btn btn-start" id="startBtn" onclick="spinWheel()">开始转动</button>
+        </div>
+        <div class="hint-text" id="hintText">添加至少 2 个选项才能开始</div>
+    </div>
+
+    <script>
+        // 终极防白屏兜底
+        window.onerror = function(msg) {
+            document.getElementById('hintText').innerHTML = "<span style='color:red'>出错啦: " + msg + "</span>";
+            return false;
+        };
+
+        var wheel = document.getElementById('wheel');
+        var optionInput = document.getElementById('optionInput');
+        var startBtn = document.getElementById('startBtn');
+        var hintText = document.getElementById('hintText');
+
+        var options = [];
+        var isSpinning = false;
+        var currentRotation = 0;
+        var audioCtx = null;
+
+        var colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#9c27b0', '#ff6b81', '#00d2ff', '#4caf50'];
+
+        // 安全读取缓存
+        function loadOptions() {
+            try {
+                var saved = localStorage.getItem('cyber_wheel_options');
+                if (saved) {
+                    options = JSON.parse(saved);
+                }
+            } catch (e) {
+                options = []; // 如果读取失败，直接给空数组
+            }
+            renderWheel();
+        }
+
+        // 安全保存缓存
+        function saveOptions() {
+            try {
+                localStorage.setItem('cyber_wheel_options', JSON.stringify(options));
+            } catch (e) {}
+        }
+
+        // 初始化音频（用 try-catch 包裹）
+        function initAudio() {
+            try {
+                if (!audioCtx) {
+                    var AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+        }
+
+        function playTickSound() {
+            try {
+                if (!audioCtx) return;
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {}
+        }
+
+        // 渲染转盘（纯 DOM 绝对定位法）
+        function renderWheel() {
+            wheel.innerHTML = '';
+            
+            if (options.length < 2) {
+                startBtn.disabled = true;
+                hintText.innerText = "添加至少 2 个选项才能开始";
+                return;
+            }
+
+            startBtn.disabled = false;
+            hintText.innerText = "当前选项数: " + options.length + " / 8";
+
+            var num = options.length;
+            var degPerOption = 360 / num;
+
+            // 绘制每一个扇形
+            for (var i = 0; i < num; i++) {
+                var slice = document.createElement('div');
+                slice.className = 'slice';
+                slice.style.backgroundColor = colors[i % colors.length];
+                slice.style.transform = 'rotate(' + (i * degPerOption) + 'deg)';
+                wheel.appendChild(slice);
+
+                // 添加文字
+                var textDiv = document.createElement('div');
+                textDiv.className = 'wheel-text';
+                textDiv.innerText = options[i];
+                
+                // 文字旋转到对应角度并往外推
+                var midDeg = i * degPerOption + degPerOption / 2;
+                // 推出去的距离根据选项数量变一下
+                var pushDistance = num > 5 ? 50 : 60;
+                
+                textDiv.style.transform = 'rotate(' + midDeg + 'deg) translate(' + pushDistance + 'px, -8px)';
+                wheel.appendChild(textDiv);
+            }
+        }
+
+        function addOption() {
+            var text = optionInput.value.trim();
+            if (!text) return;
+
+            if (options.length >= 8) {
+                alert("最多只能添加 8 个选项！");
+                return;
+            }
+
+            options.push(text);
+            optionInput.value = '';
+            saveOptions();
+            renderWheel();
+        }
+
+        function clearOptions() {
+            if (options.length === 0) return;
+            options = [];
+            saveOptions();
+            renderWheel();
+            wheel.style.transition = 'none';
+            wheel.style.transform = 'rotate(0deg)';
+            currentRotation = 0;
+        }
+
+        function spinWheel() {
+            if (isSpinning || options.length < 2) return;
+            isSpinning = true;
+            initAudio();
+
+            var num = options.length;
+            var degPerOption = 360 / num;
+
+            // 随机选一个中奖选项
+            var winIndex = Math.floor(Math.random() * num);
+            
+            // 计算目标角度：
+            // 让指针（在0度位置）指向目标扇形的中心
+            var targetDeg = winIndex * degPerOption + degPerOption / 2;
+            
+            // 转 5 圈，让目标中心对准 0 度
+            var baseSpins = 1800; 
+            var finalRotation = currentRotation + baseSpins + (360 - targetDeg);
+            
+            // 加一点随机偏移，显得真实
+            var randomOffset = (Math.random() - 0.5) * (degPerOption - 10);
+            finalRotation += randomOffset;
+
+            currentRotation = finalRotation;
+            
+            // 开启旋转动画
+            wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.1, 1)';
+            wheel.style.transform = 'rotate(' + currentRotation + 'deg)';
+
+            // 滴答声
+            var tickInterval = setInterval(playTickSound, 100);
+            setTimeout(function() { clearInterval(tickInterval); }, 3000);
+
+            // 停下结算
+            setTimeout(function() {
+                isSpinning = false;
+                if (window.plus) {
+                    try { plus.device.vibrate([100, 50, 100]); } catch(e) {}
+                }
+                
+                setTimeout(function() {
+                    alert("🎉 命运选中了：\n\n" + options[winIndex]);
+                }, 100);
+            }, 4000);
+        }
+
+        // 绑定回车事件
+        optionInput.addEventListener('keydown', function(e) {
+            if (e.keyCode === 13 || e.key === 'Enter') addOption();
+        });
+
+        loadOptions();
+    </script>
+</body>
+</html>

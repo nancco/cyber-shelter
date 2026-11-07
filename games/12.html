@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博抛硬币</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        .result-text {
+            font-size: 28px; font-weight: bold; color: #ffd700;
+            margin-bottom: 50px; height: 40px; text-align: center;
+            transition: opacity 0.3s;
+        }
+
+        /* 3D 硬币容器 */
+        .coin-wrapper {
+            perspective: 1000px;
+            width: 180px; height: 180px;
+            cursor: pointer;
+            margin-bottom: 50px;
+        }
+        
+        .coin {
+            width: 100%; height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 2s cubic-bezier(0.2, 0.8, 0.3, 1);
+        }
+
+        /* 硬币正反面 */
+        .face {
+            position: absolute;
+            width: 100%; height: 100%;
+            backface-visibility: hidden; /* 隐藏背面 */
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 70px; font-weight: bold;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            background-color: #1e1e1e;
+            border: 4px solid #333;
+        }
+        
+        .front { color: #ffd700; }
+        .back { color: #ff4757; transform: rotateY(180deg); }
+
+        .hint {
+            color: #555; font-size: 14px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="result-text" id="resultText">抛硬币，测天命</div>
+
+    <div class="coin-wrapper" id="coinWrapper">
+        <div class="coin" id="coin">
+            <div class="face front">☯</div>
+            <div class="face back">☠</div>
+        </div>
+    </div>
+
+    <div class="hint">点击硬币开始</div>
+
+    <script>
+        var coinWrapper = document.getElementById('coinWrapper');
+        var coin = document.getElementById('coin');
+        var resultText = document.getElementById('resultText');
+        
+        var isFlipping = false;
+        var currentRotation = 0;
+        var audioCtx = null;
+
+        // 结果文案库
+        var frontTexts = ["大吉：去干饭！", "天命：立刻去睡觉！", "冲就完了！", "正缘出现，去表白！"];
+        var backTexts = ["大凶：继续摸鱼", "退退退！", "算了吧，别折腾了", "再想想，别冲动"];
+
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        // 清脆的硬币音效
+        function playCoinSound() {
+            if (!audioCtx) return;
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(1500, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(500, audioCtx.currentTime + 0.1);
+            
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            
+            if (window.plus) plus.device.vibrate(50);
+            else if (navigator.vibrate) navigator.vibrate(50);
+        }
+
+        function flipCoin() {
+            if (isFlipping) return;
+            isFlipping = true;
+            initAudio();
+            playCoinSound();
+            
+            resultText.style.opacity = 0;
+
+            // 随机决定是正面(0)还是反面(1)
+            var isFront = Math.random() < 0.5;
+            
+            // 计算要旋转的角度：基础旋转几圈(比如 5 圈)，然后加上正反面
+            // 正面是 0 度，反面是 180 度
+            var extraSpins = 5 * 360; 
+            var targetDeg = isFront ? 0 : 180;
+            
+            // 保证每次旋转都比上一次多
+            currentRotation += extraSpins + targetDeg - (currentRotation % 360);
+
+            coin.style.transform = "rotateY(" + currentRotation + "deg)";
+
+            // 动画结束后显示结果
+            setTimeout(function() {
+                resultText.style.opacity = 1;
+                if (isFront) {
+                    resultText.style.color = "#ffd700";
+                    resultText.innerText = frontTexts[Math.floor(Math.random() * frontTexts.length)];
+                } else {
+                    resultText.style.color = "#ff4757";
+                    resultText.innerText = backTexts[Math.floor(Math.random() * backTexts.length)];
+                }
+                isFlipping = false;
+            }, 2100); // 和 CSS 的 transition 时间 2s 保持匹配
+        }
+
+        // 移动端和 PC 端双重监听
+        coinWrapper.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            flipCoin();
+        });
+        coinWrapper.addEventListener('mousedown', function(e) {
+            if(e.button === 0) flipCoin();
+        });
+    </script>
+</body>
+</html>

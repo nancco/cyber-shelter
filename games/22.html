@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博表情包</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 24px; color: #ffd700; margin-bottom: 10px; letter-spacing: 2px;}
+        .header p { font-size: 14px; color: #888; }
+
+        /* 核心：用纯 CSS 画的表情包卡片 */
+        .meme-card {
+            width: 85vw;
+            max-width: 320px;
+            height: 320px;
+            background-color: #1e1e1e;
+            border: 4px solid #fff;
+            border-radius: 16px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 20px; box-sizing: border-box;
+            margin-bottom: 30px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+            overflow: hidden;
+        }
+        
+        .meme-card:active { transform: scale(0.98); }
+
+        /* 巨大的 Emoji */
+        .meme-emoji {
+            font-size: 110px;
+            margin-bottom: 10px;
+            line-height: 1;
+            transition: transform 0.2s;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.4));
+        }
+
+        /* 沙雕文案 */
+        .meme-text {
+            font-size: 28px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.3;
+            word-wrap: break-word;
+            color: #fff;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* 底部换一个按钮 */
+        .btn-refresh {
+            width: 85vw;
+            max-width: 320px;
+            background-color: #00d2ff;
+            color: #000;
+            border: none;
+            padding: 15px 0;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+            outline: none;
+        }
+        .btn-refresh:active { background-color: #0099cc; }
+
+        .hint { font-size: 12px; color: #555; margin-top: 20px; }
+
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="header">
+        <h1>随机表情</h1>
+        <p>纯本地生成，断网也能发疯</p>
+    </div>
+
+    <div class="meme-card" id="memeCard" onclick="generateMeme()">
+        <div class="meme-emoji" id="memeEmoji">😭</div>
+        <div class="meme-text" id="memeText">我真的会谢</div>
+    </div>
+
+    <button class="btn-refresh" onclick="generateMeme()">再发个疯</button>
+
+    <div class="hint">点击卡片或按钮均可更换</div>
+
+    <script>
+        window.onerror = function(msg) {
+            alert("发生错误: " + msg);
+            return false;
+        };
+
+        // 极度扩充的本地发疯词库
+        var memeData = [
+            { emoji: "😭", text: "我真的会谢" },
+            { emoji: "🤡", text: "小丑竟是我自己" },
+            { emoji: "💩", text: "一坨大便" },
+            { emoji: "🙏", text: "求求你做个人吧" },
+            { emoji: "🤬", text: "你在狗叫什么" },
+            { emoji: "🥺", text: "求求了，别搞我" },
+            { emoji: "🐟", text: "摸鱼中，勿扰" },
+            { emoji: "🐢", text: "龟速加载中..." },
+            { emoji: "💔", text: "心碎了一地" },
+            { emoji: "🤫", text: "嘘，老板来了" },
+            { emoji: "💤", text: "好想睡觉" },
+            { emoji: "😅", text: "汗流浃背了吧老弟" },
+            { emoji: "🍵", text: "喝杯茶，看淡一切" },
+            { emoji: "🙄", text: "就这？就这？" },
+            { emoji: "🤷", text: "关我屁事" },
+            { emoji: "💸", text: "钱包比脸还干净" },
+            { emoji: "🍉", text: "前排吃瓜，不嫌事大" },
+            { emoji: "🚬", text: "愁啊，太愁了" },
+            { emoji: "🧠", text: "脑子已宕机" },
+            { emoji: "🐶", text: "单身狗路过" },
+            { emoji: "🌚", text: "无语凝噎" },
+            { emoji: "🔪", text: "我刀呢？我刀呢！" },
+            { emoji: "👋", text: "告辞，江湖不见" },
+            { emoji: "🦆", text: "你说的都对，像只鸭子" },
+            { emoji: "💀", text: "寄了，直接埋了吧" },
+            { emoji: "☕", text: "咖啡续命，别跟我说话" },
+            { emoji: "🤯", text: "CPU烧了，听不懂人话" },
+            { emoji: "🛌", text: "别吵，我的床封印了我" },
+            { emoji: "🕶️", text: "装酷中，勿cue" },
+            { emoji: "😇", text: "安详升天，感觉良好" },
+            { emoji: "🤝", text: "交个朋友，借我50" },
+            { emoji: "🍜", text: "干饭人，干饭魂" },
+            { emoji: "🤮", text: "这饼画得太硬，吃不下" },
+            { emoji: "🐸", text: "孤寡孤寡孤寡" },
+            { emoji: "🐱", text: "喵喵喵？你在说什么鬼话" },
+            { emoji: "💣", text: "别惹我，随时爆炸" },
+            { emoji: "🩸", text: "我的血条空了" },
+            { emoji: "📉", text: "跌停吧，毁灭吧" },
+            { emoji: "😵‍💫", text: "晕头转向，找不到北" }
+        ];
+
+        // 随机背景色库
+        var bgColors = ['#2d1c1c', '#1c2d22', '#1c222d', '#2d2a1c', '#251c2d', '#1e1e1e'];
+
+        var card = document.getElementById('memeCard');
+        var emojiEl = document.getElementById('memeEmoji');
+        var textEl = document.getElementById('memeText');
+
+        var lastIndex = -1;
+
+        function generateMeme() {
+            // 手机震动反馈
+            if (window.plus) {
+                try { plus.device.vibrate(30); } catch(e) {}
+            }
+
+            var randomIndex;
+            // 避免连续两次抽到一样的
+            do {
+                randomIndex = Math.floor(Math.random() * memeData.length);
+            } while (randomIndex === lastIndex && memeData.length > 1);
+            
+            lastIndex = randomIndex;
+
+            var meme = memeData[randomIndex];
+            
+            // 改变文字和 Emoji
+            emojiEl.innerText = meme.emoji;
+            textEl.innerText = meme.text;
+
+            // 💡 核心魔法：让 Emoji 随机倾斜 -10度 到 10度
+            var randomAngle = Math.floor(Math.random() * 20) - 10;
+            emojiEl.style.transform = 'rotate(' + randomAngle + 'deg)';
+
+            // 改变卡片背景色（随机抽取）
+            var randomColor = bgColors[Math.floor(Math.random() * bgColors.length)];
+            card.style.backgroundColor = randomColor;
+
+            // 播放一个短促的“啵”声
+            playPopSound();
+        }
+
+        var audioCtx = null;
+        function playPopSound() {
+            try {
+                if (!audioCtx) {
+                    var AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (!audioCtx) return;
+
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {}
+        }
+
+        // 初始化
+        generateMeme();
+    </script>
+</body>
+</html>

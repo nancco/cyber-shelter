@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>暗黑扫雷</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 90vw;
+            max-width: 400px;
+            margin-bottom: 10px;
+            background-color: #1e1e1e;
+            padding: 10px 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            box-sizing: border-box;
+        }
+        .info { font-size: 18px; font-family: monospace; color: #ff4757; font-weight: bold;}
+        
+        /* 音效开关按钮 */
+        .sound-toggle {
+            background: none; border: none; font-size: 20px; cursor: pointer;
+            color: #fff; padding: 0; margin-right: 5px;
+        }
+
+        .difficulty {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .diff-btn {
+            background-color: #1e1e1e;
+            color: #888;
+            border: 1px solid #333;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .diff-btn.active {
+            background-color: #333;
+            color: #fff;
+            border-color: #555;
+        }
+        
+        .reset-btn {
+            background-color: #333; color: #fff; border: none;
+            padding: 8px 15px; border-radius: 8px; font-size: 16px;
+        }
+        .reset-btn:active { background-color: #555; }
+
+        #board-container {
+            width: 90vw;
+            max-width: 400px;
+            aspect-ratio: 1 / 1; 
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 4px;
+            box-sizing: border-box;
+        }
+
+        #board {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            gap: 1px;
+        }
+
+        .cell {
+            background-color: #333333;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px; 
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .cell:active { background-color: #444; }
+
+        .cell.revealed { background-color: #121212; border: 1px solid #2a2a2a; }
+        .cell[data-num="1"] { color: #4a9eff; }
+        .cell[data-num="2"] { color: #4caf50; }
+        .cell[data-num="3"] { color: #ff4757; }
+        .cell[data-num="4"] { color: #9c27b0; }
+        .cell.mine { background-color: #ff4757; color: #fff; }
+        .cell.flag { color: #ffd700; }
+
+        #message { margin-top: 15px; font-size: 16px; font-weight: bold; height: 24px; }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="header">
+        <button class="sound-toggle" id="soundBtn" onclick="toggleSound()">🔊</button>
+        <div class="info" id="mineCount">💣 10</div>
+        <button class="reset-btn" onclick="initGame()">重开</button>
+        <div class="info" id="timer">⏱ 000</div>
+    </div>
+
+    <div class="difficulty">
+        <button class="diff-btn active" id="btn-easy" onclick="setDifficulty('easy')">初级</button>
+        <button class="diff-btn" id="btn-medium" onclick="setDifficulty('medium')">中级</button>
+        <button class="diff-btn" id="btn-hard" onclick="setDifficulty('hard')">高级</button>
+    </div>
+
+    <div id="board-container">
+        <div id="board"></div>
+    </div>
+    
+    <div id="message"></div>
+
+    <script>
+        var board = [];
+        var cells = [];
+        var gameOver = false;
+        var flags = 0;
+        var revealedCount = 0;
+        var timer = 0;
+        var timerInterval = null;
+        var pressTimer = null;
+        var isLongPress = false;
+
+        // 音效相关变量
+        var isSoundOn = true;
+        var audioCtx = null;
+
+        var levels = {
+            easy: { rows: 9, cols: 9, mines: 10 },
+            medium: { rows: 16, cols: 16, mines: 40 },
+            hard: { rows: 16, cols: 24, mines: 80 }
+        };
+        var currentLevel = 'easy';
+
+        var boardEl = document.getElementById('board');
+        var mineCountEl = document.getElementById('mineCount');
+        var timerEl = document.getElementById('timer');
+        var messageEl = document.getElementById('message');
+        var soundBtn = document.getElementById('soundBtn');
+
+        // ====== 音效核心引擎 ======
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 播放不同的音效
+        function playSound(type) {
+            if (!isSoundOn) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            var osc = audioCtx.createOscillator();
+            var gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            var now = audioCtx.currentTime;
+
+            if (type === 'reveal') {
+                // 翻开：短促高音
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(); osc.stop(now + 0.05);
+                
+                // 手机震动（极短）
+                vibrate(10);
+                
+            } else if (type === 'flag') {
+                // 插旗：稍微高频的滴
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(1200, now);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(); osc.stop(now + 0.05);
+                
+                vibrate(20);
+                
+            } else if (type === 'boom') {
+                // 爆炸：低沉嗡嗡声
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(); osc.stop(now + 0.3);
+                
+                vibrate(300);
+            }
+        }
+
+        // 震动辅助函数
+        function vibrate(ms) {
+            if (window.plus) {
+                plus.device.vibrate(ms);
+            } else if (navigator.vibrate) {
+                navigator.vibrate(ms);
+            }
+        }
+
+        function toggleSound() {
+            isSoundOn = !isSoundOn;
+            soundBtn.innerText = isSoundOn ? '🔊' : '🔇';
+            if (isSoundOn) initAudio(); // 唤醒音频
+        }
+
+        // 首次点击页面激活音频
+        document.body.addEventListener('touchstart', initAudio, { once: true });
+        document.body.addEventListener('mousedown', initAudio, { once: true });
+
+
+        // ====== 游戏逻辑 ======
+        function setDifficulty(level) {
+            currentLevel = level;
+            document.getElementById('btn-easy').classList.remove('active');
+            document.getElementById('btn-medium').classList.remove('active');
+            document.getElementById('btn-hard').classList.remove('active');
+            document.getElementById('btn-' + level).classList.add('active');
+            initGame();
+        }
+
+        function initGame() {
+            var config = levels[currentLevel];
+            var totalCells = config.rows * config.cols;
+            
+            board = [];
+            cells = [];
+            gameOver = false;
+            flags = 0;
+            revealedCount = 0;
+            timer = 0;
+            clearInterval(timerInterval);
+            timerEl.innerText = '⏱ 000';
+            mineCountEl.innerText = '💣 ' + config.mines;
+            messageEl.innerText = '';
+            boardEl.innerHTML = '';
+
+            boardEl.style.gridTemplateColumns = 'repeat(' + config.cols + ', 1fr)';
+            var fontSize = config.cols > 16 ? '8px' : '14px';
+
+            for (var i = 0; i < totalCells; i++) {
+                board.push({ isMine: false, isRevealed: false, isFlagged: false, neighborMines: 0 });
+            }
+
+            var minesPlaced = 0;
+            while (minesPlaced < config.mines) {
+                var idx = Math.floor(Math.random() * totalCells);
+                if (!board[idx].isMine) {
+                    board[idx].isMine = true;
+                    minesPlaced++;
+                }
+            }
+
+            for (var i = 0; i < board.length; i++) {
+                if (!board[i].isMine) {
+                    var neighbors = getNeighbors(i, config.rows, config.cols);
+                    var count = 0;
+                    for (var j = 0; j < neighbors.length; j++) {
+                        if (board[neighbors[j]].isMine) count++;
+                    }
+                    board[i].neighborMines = count;
+                }
+            }
+
+            for (var i = 0; i < board.length; i++) {
+                var cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.style.fontSize = fontSize;
+                cell.dataset.idx = i;
+                bindEvents(cell, i);
+                boardEl.appendChild(cell);
+                cells.push(cell);
+            }
+        }
+
+        function bindEvents(cell, i) {
+            cell.addEventListener('touchstart', function(e) {
+                isLongPress = false;
+                pressTimer = setTimeout(function() {
+                    isLongPress = true;
+                    toggleFlag(i);
+                }, 400);
+            });
+
+            cell.addEventListener('touchend', function(e) {
+                clearTimeout(pressTimer);
+                if (!isLongPress) {
+                    revealCell(i);
+                }
+            });
+
+            cell.addEventListener('mousedown', function(e) {
+                if (e.button === 2) toggleFlag(i); 
+                else if (e.button === 0) revealCell(i); 
+            });
+            cell.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        }
+
+        function getNeighbors(idx, rows, cols) {
+            var neighbors = [];
+            var row = Math.floor(idx / cols);
+            var col = idx % cols;
+            for (var r = row - 1; r <= row + 1; r++) {
+                for (var c = col - 1; c <= col + 1; c++) {
+                    if (r >= 0 && r < rows && c >= 0 && c < cols) {
+                        if (r !== row || c !== col) neighbors.push(r * cols + c);
+                    }
+                }
+            }
+            return neighbors;
+        }
+
+        function revealCell(idx) {
+            if (gameOver || board[idx].isRevealed || board[idx].isFlagged) return;
+
+            var config = levels[currentLevel];
+
+            if (!timerInterval) {
+                timerInterval = setInterval(function() {
+                    timer++;
+                    timerEl.innerText = '⏱ ' + (timer < 10 ? '00' : timer < 100 ? '0' : '') + timer;
+                }, 1000);
+            }
+
+            var cell = cells[idx];
+            
+            if (board[idx].isMine) {
+                cell.classList.add('mine');
+                cell.innerText = '💣';
+                playSound('boom'); // 踩雷音效
+                endGame(false);
+                return;
+            }
+
+            playSound('reveal'); // 翻开音效
+
+            board[idx].isRevealed = true;
+            cell.classList.add('revealed');
+            revealedCount++;
+
+            if (board[idx].neighborMines > 0) {
+                cell.innerText = board[idx].neighborMines;
+                cell.setAttribute('data-num', board[idx].neighborMines);
+            } else {
+                var neighbors = getNeighbors(idx, config.rows, config.cols);
+                for (var i = 0; i < neighbors.length; i++) {
+                    // 为了防止大面积翻开时声音重叠炸麦，这里做个延迟或直接不加声音判断
+                    // 简单点，就直接递归
+                    revealCell(neighbors[i]);
+                }
+            }
+
+            if (revealedCount === (config.rows * config.cols) - config.mines) {
+                endGame(true);
+            }
+        }
+
+        function toggleFlag(idx) {
+            if (gameOver || board[idx].isRevealed) return;
+            var config = levels[currentLevel];
+            var cell = cells[idx];
+            
+            if (!board[idx].isFlagged) {
+                if (flags < config.mines) {
+                    board[idx].isFlagged = true;
+                    cell.innerText = '🚩';
+                    cell.classList.add('flag');
+                    flags++;
+                    playSound('flag'); // 插旗音效
+                }
+            } else {
+                board[idx].isFlagged = false;
+                cell.innerText = '';
+                cell.classList.remove('flag');
+                flags--;
+                playSound('flag'); // 取消插旗音效
+            }
+            mineCountEl.innerText = '💣 ' + (config.mines - flags);
+        }
+
+        function endGame(win) {
+            gameOver = true;
+            clearInterval(timerInterval);
+            for (var i = 0; i < board.length; i++) {
+                if (board[i].isMine && !board[i].isFlagged) {
+                    cells[i].classList.add('mine');
+                    cells[i].innerText = '💣';
+                }
+            }
+            messageEl.innerText = win ? "🎉 扫雷成功！" : "💥 踩雷了，重开吧。";
+            messageEl.style.color = win ? "#4caf50" : "#ff4757";
+        }
+
+        initGame();
+    </script>
+</body>
+</html>

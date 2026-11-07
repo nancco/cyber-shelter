@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>白噪音电台</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        /* 播放器主体卡片 */
+        .player-card {
+            width: 85vw;
+            max-width: 320px;
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* 黑胶唱片封面（动态显示当前图标） */
+        .cover {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: repeating-radial-gradient(
+                circle,
+                #222,
+                #222 5px,
+                #111 5px,
+                #111 10px
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            animation: spin 8s linear infinite;
+            animation-play-state: paused; /* 默认暂停 */
+        }
+        /* 唱片中间的圆孔，用来显示 Emoji */
+        .cover::after {
+            content: attr(data-icon);
+            font-size: 50px;
+            width: 80px;
+            height: 80px;
+            background-color: #1a1a1a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+        }
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 播放时唱片旋转 */
+        .playing .cover {
+            animation-play-state: running;
+        }
+
+        /* 当前音效名字 */
+        .song-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 25px;
+            letter-spacing: 1px;
+        }
+
+        /* 播放/暂停控制 */
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .play-btn {
+            width: 64px;
+            height: 64px;
+            background-color: #ffffff;
+            color: #121212;
+            border-radius: 50%;
+            font-size: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(255,255,255,0.15);
+            border: none;
+            cursor: pointer;
+        }
+        .play-btn:active { transform: scale(0.95); }
+
+        /* 底部音效切换区 */
+        .type-selector {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+        }
+        .type-btn {
+            background-color: #121212;
+            border: 1px solid #333;
+            color: #888;
+            padding: 10px 0;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .type-btn.active {
+            background-color: #333;
+            color: #fff;
+            border-color: #555;
+            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        }
+        
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="player-card" id="playerCard">
+        <!-- 旋转封面，默认显示雨声图标 -->
+        <div class="cover" id="coverDisc" data-icon="🌧️"></div>
+        
+        <!-- 当前播放名字 -->
+        <div class="song-name" id="songName">雨声</div>
+
+        <div class="controls">
+            <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+        </div>
+
+        <!-- 电台切换 -->
+        <div class="type-selector">
+            <button class="type-btn active" id="btn-rain" onclick="changeType('rain', '🌧️', '雨声')">雨声</button>
+            <button class="type-btn" id="btn-wave" onclick="changeType('wave', '🌊', '海浪')">海浪</button>
+            <button class="type-btn" id="btn-fire" onclick="changeType('fire', '🔥', '篝火')">篝火</button>
+            <button class="type-btn" id="btn-wind" onclick="changeType('wind', '🌬️', '风声')">风声</button>
+        </div>
+    </div>
+
+    <script>
+        var audioCtx = null;
+        var currentSource = null;
+        var currentGain = null;
+        var currentFilter = null;
+        var waveInterval = null;
+
+        var isPlaying = false;
+        var currentType = 'rain'; // 默认雨声
+
+        var playerCard = document.getElementById('playerCard');
+        var coverDisc = document.getElementById('coverDisc');
+        var songName = document.getElementById('songName');
+        var playBtn = document.getElementById('playBtn');
+
+        // 1. 初始化音频引擎
+        function initAudio() {
+            if (!audioCtx) {
+                var AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioCtx = new AudioContext();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 2. 生成白噪音数据
+        function createNoiseBuffer() {
+            var bufferSize = 2 * audioCtx.sampleRate;
+            var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            var output = buffer.getChannelData(0);
+            for (var i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+            return buffer;
+        }
+
+        // 3. 切换音效类型
+        function changeType(type, icon, name) {
+            currentType = type;
+            
+            // 更新 UI
+            coverDisc.setAttribute('data-icon', icon);
+            songName.innerText = name;
+
+            // 更新按钮高亮
+            var btns = document.querySelectorAll('.type-btn');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.remove('active');
+            }
+            document.getElementById('btn-' + type).classList.add('active');
+
+            // 如果正在播放，则无缝切换音频
+            if (isPlaying) {
+                stopAudioEngine(); // 先停旧的
+                startAudioEngine(); // 再启新的
+            }
+        }
+
+        // 4. 播放 / 暂停
+        function togglePlay() {
+            initAudio();
+            if (isPlaying) {
+                // 暂停
+                stopAudioEngine();
+                isPlaying = false;
+                playBtn.innerText = '▶';
+                playerCard.classList.remove('playing'); // 停止旋转
+            } else {
+                // 播放
+                startAudioEngine();
+                isPlaying = true;
+                playBtn.innerText = '⏸';
+                playerCard.classList.add('playing'); // 开始旋转
+            }
+        }
+
+        // 5. 启动音频引擎
+        function startAudioEngine() {
+            if (!audioCtx) return;
+
+            currentSource = audioCtx.createBufferSource();
+            currentSource.buffer = createNoiseBuffer();
+            currentSource.loop = true;
+
+            currentFilter = audioCtx.createBiquadFilter();
+            currentGain = audioCtx.createGain();
+            currentGain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+
+            // 针对不同音效配置滤波器
+            if (currentType === 'rain') {
+                currentFilter.type = 'highpass';
+                currentFilter.frequency.value = 1000;
+            } else if (currentType === 'wave') {
+                currentFilter.type = 'lowpass';
+                currentFilter.frequency.value = 500;
+                // 海浪特效：音量周期性起伏
+                currentGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                var t = 0;
+                waveInterval = setInterval(function(){
+                    if(!isPlaying) { clearInterval(waveInterval); return; }
+                    t += 0.1;
+                    currentGain.gain.linearRampToValueAtTime(0.1 + Math.abs(Math.sin(t))*0.4, audioCtx.currentTime + 0.1);
+                }, 100);
+            } else if (currentType === 'fire') {
+                currentFilter.type = 'bandpass';
+                currentFilter.frequency.value = 800;
+                currentFilter.Q.value = 0.5;
+            } else if (currentType === 'wind') {
+                currentFilter.type = 'lowpass';
+                currentFilter.frequency.value = 400;
+            }
+
+            currentSource.connect(currentFilter);
+            currentFilter.connect(currentGain);
+            currentGain.connect(audioCtx.destination);
+            
+            currentSource.start();
+        }
+
+        // 6. 停止音频引擎
+        function stopAudioEngine() {
+            if (waveInterval) {
+                clearInterval(waveInterval);
+                waveInterval = null;
+            }
+            if (currentSource) {
+                try { currentSource.stop(); } catch(e) {}
+                currentSource.disconnect();
+                currentSource = null;
+            }
+        }
+    </script>
+</body>
+</html>

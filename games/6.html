@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>极简播放器</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            user-select: none;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+        .card {
+            background-color: #1e1e1e;
+            width: 85%;
+            max-width: 300px;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+        .title {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 20px;
+            word-break: break-all; /* 防止歌名太长撑破屏幕 */
+        }
+        
+        /* 原生播放器样式，虽然不能完全暗黑，但绝对兼容所有手机 */
+        audio {
+            width: 100%;
+            margin-bottom: 20px;
+            outline: none;
+        }
+
+        /* 选文件按钮，用最原始的样式 */
+        input[type="file"] {
+            display: none; /* 隐藏真正的丑陋按钮 */
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px 0;
+            background-color: #333;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn:active {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div class="card">
+        <div class="title" id="songName">请选择本地音乐</div>
+        
+        <!-- 原生播放器，自带控制条，绝对不会白屏 -->
+        <audio id="audioPlayer" controls></audio>
+        
+        <!-- 选歌按钮 -->
+        <label for="fileInput" class="btn">💿 选择本地音频</label>
+        <input type="file" id="fileInput" accept="audio/*">
+        
+        <div style="color: #ff4757; font-size: 12px; margin-top: 15px;" id="errorMsg"></div>
+    </div>
+
+    <script>
+        var audio = document.getElementById('audioPlayer');
+        var fileInput = document.getElementById('fileInput');
+        var songName = document.getElementById('songName');
+        var errorMsg = document.getElementById('errorMsg');
+
+        // 捕获全局报错，绝不让它白屏
+        window.onerror = function(msg) {
+            errorMsg.innerText = "出错了: " + msg;
+            return false;
+        };
+
+        // 监听文件选择
+        fileInput.addEventListener('change', function(e) {
+            try {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                // 显示文件名
+                songName.innerText = file.name;
+
+                // 生成播放地址
+                var url = URL.createObjectURL(file);
+                audio.src = url;
+                
+                // 尝试自动播放
+                audio.play();
+            } catch (err) {
+                errorMsg.innerText = "解析文件失败: " + err.message;
+            }
+        });
+    </script>
+</body>
+</html>

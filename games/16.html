@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>赛博自爆</title>
+    <style>
+        body {
+            background-color: #121212; color: #ffffff; font-family: sans-serif;
+            margin: 0; padding: 0; height: 100vh; overflow: hidden; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .back-btn {
+            position: fixed; top: 15px; left: 15px; z-index: 9999;
+            color: #fff; background: rgba(50, 50, 50, 0.8);
+            padding: 8px 15px; border-radius: 20px; text-decoration: none; font-size: 14px;
+        }
+
+        #hint {
+            position: absolute; z-index: 10; text-align: center;
+            pointer-events: none;
+            animation: pulse 2s infinite;
+        }
+        #hint h1 { color: #ff4757; font-size: 28px; margin-bottom: 10px; letter-spacing: 2px;}
+        #hint p { color: #888; font-size: 14px; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        #boom-screen {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #ff4757; color: #fff; z-index: 99999;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #boom-screen h1 { font-size: 60px; font-weight: bold; margin-bottom: 10px;}
+
+        canvas {
+            display: block; position: absolute; top: 0; left: 0; z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <a href="../index.html" class="back-btn">← 返回</a>
+
+    <div id="hint">
+        <h1>🧨 赛博自爆按钮</h1>
+        <p>点击屏幕点燃烟花，App 将直接闪退</p>
+    </div>
+
+    <div id="boom-screen">
+        <h1>💥 BOOM!</h1>
+    </div>
+
+    <canvas id="fireworksCanvas"></canvas>
+
+    <script>
+        // 用最古老、最稳定的语法捕获错误
+        window.onerror = function(msg) {
+            document.getElementById('hint').innerHTML = "<h1 style='color:red'>报错了</h1><p>" + msg + "</p>";
+            return false;
+        };
+
+        var canvas = document.getElementById('fireworksCanvas');
+        var ctx = canvas.getContext('2d');
+        var hint = document.getElementById('hint');
+        var boomScreen = document.getElementById('boom-screen');
+        
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        var particles = [];
+        var hasExploded = false;
+        var audioCtx = null;
+        var animTimer = null;
+
+        // 音频和震动
+        function playBoomSound() {
+            try {
+                if (!audioCtx) {
+                    var AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) audioCtx = new AudioContext();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if (!audioCtx) return;
+
+                var osc = audioCtx.createOscillator();
+                var gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.8);
+                
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
+                
+                osc.start(); osc.stop(audioCtx.currentTime + 0.8);
+                
+                if (window.plus) plus.device.vibrate(500);
+            } catch(e) {}
+        }
+
+        // 制造粒子
+        function createExplosion(x, y) {
+            var colors = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#ff6b81', '#ffffff'];
+            for (var i = 0; i < 80; i++) {
+                var angle = Math.random() * Math.PI * 2;
+                var speed = Math.random() * 10 + 2;
+                particles.push({
+                    x: x, y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,
+                    decay: Math.random() * 0.03 + 0.02,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        // 渲染循环（使用 setInterval 降级，兼容性 100%）
+        function draw() {
+            ctx.fillStyle = 'rgba(18, 18, 18, 0.3)';
+            ctx.fillRect(0, 0, width, height);
+
+            for (var i = particles.length - 1; i >= 0; i--) {
+                var p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2; // 重力
+                p.vx *= 0.97; // 阻力
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1); // 死掉的粒子移出数组，防止卡顿
+                    continue;
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 爆炸触发
+        function triggerBoom(e) {
+            if (hasExploded) return;
+            hasExploded = true;
+            playBoomSound();
+            
+            var x = (e.clientX || (e.touches && e.touches[0].clientX)) || (width / 2);
+            var y = (e.clientY || (e.touches && e.touches[0].clientY)) || (height / 2);
+
+            hint.style.display = 'none';
+            createExplosion(x, y);
+
+            // 启动动画
+            animTimer = setInterval(draw, 1000 / 60); 
+
+            // 1秒后超度
+            setTimeout(function() {
+                clearInterval(animTimer);
+                if (window.plus) {
+                    plus.runtime.quit(); // 杀进程
+                } else {
+                    boomScreen.style.display = 'flex'; // 电脑红屏
+                }
+            }, 1000);
+        }
+
+        // 用最简单的事件绑定
+        document.onmousedown = triggerBoom;
+        document.ontouchstart = triggerBoom;
+    </script>
+</body>
+</html>
