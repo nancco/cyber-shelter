@@ -20,6 +20,3 @@
 
 ### 📱 安卓 APK 下载
 如果你更喜欢原生 App 体验，可在右侧 `Releases` 中下载最新的 APK 文件安装。
-
----
-*Created by 卜雨小C/nancco*
